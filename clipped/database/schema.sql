@@ -253,7 +253,7 @@ CREATE OR REPLACE FUNCTION _throttle(p_player_id UUID, p_action TEXT)
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
+SET search_path = public, extensions
 AS $$
 DECLARE
     v_prev TIMESTAMPTZ;
@@ -276,7 +276,7 @@ CREATE OR REPLACE FUNCTION _lock_player(p_token TEXT)
 RETURNS TABLE(err JSONB, player_id UUID, room_id UUID, is_host BOOLEAN)
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
+SET search_path = public, extensions
 AS $$
 DECLARE
     v_player players%ROWTYPE;
@@ -316,7 +316,7 @@ CREATE OR REPLACE FUNCTION _finalize_round(p_round_id UUID)
 RETURNS VOID
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
+SET search_path = public, extensions
 AS $$
 BEGIN
     INSERT INTO round_results (
@@ -390,7 +390,7 @@ CREATE OR REPLACE FUNCTION _maybe_advance(p_room_id UUID, p_force BOOLEAN)
 RETURNS VOID
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
+SET search_path = public, extensions
 AS $$
 DECLARE
     v_room rooms%ROWTYPE;
@@ -458,7 +458,7 @@ CREATE OR REPLACE FUNCTION _catch_up(p_room_id UUID, p_force BOOLEAN)
 RETURNS VOID
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
+SET search_path = public, extensions
 AS $$
 DECLARE
     v_before TEXT;
@@ -485,7 +485,7 @@ RETURNS JSONB
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
-SET search_path = public
+SET search_path = public, extensions
 AS $$
     WITH base AS (
         SELECT
@@ -527,7 +527,7 @@ CREATE OR REPLACE FUNCTION _build_view(p_player_id UUID)
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
+SET search_path = public, extensions
 AS $$
 DECLARE
     v_player players%ROWTYPE;
@@ -745,7 +745,7 @@ CREATE OR REPLACE FUNCTION create_room(p_display_name TEXT)
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
+SET search_path = public, extensions
 AS $$
 DECLARE
     v_name TEXT := _clean_name(p_display_name);
@@ -791,7 +791,7 @@ CREATE OR REPLACE FUNCTION join_room(p_code TEXT, p_display_name TEXT)
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
+SET search_path = public, extensions
 AS $$
 DECLARE
     v_name TEXT := _clean_name(p_display_name);
@@ -852,7 +852,7 @@ CREATE OR REPLACE FUNCTION reconnect(p_token TEXT)
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
+SET search_path = public, extensions
 AS $$
 DECLARE
     v_err JSONB;
@@ -875,7 +875,7 @@ CREATE OR REPLACE FUNCTION leave_room(p_token TEXT)
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
+SET search_path = public, extensions
 AS $$
 DECLARE
     v_err JSONB;
@@ -921,7 +921,7 @@ CREATE OR REPLACE FUNCTION update_settings(
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
+SET search_path = public, extensions
 AS $$
 DECLARE
     v_err JSONB;
@@ -982,7 +982,7 @@ CREATE OR REPLACE FUNCTION save_custom_prompt(p_token TEXT, p_body TEXT, p_promp
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
+SET search_path = public, extensions
 AS $$
 DECLARE
     v_err JSONB;
@@ -1042,7 +1042,7 @@ CREATE OR REPLACE FUNCTION delete_custom_prompt(p_token TEXT, p_prompt_id UUID)
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
+SET search_path = public, extensions
 AS $$
 DECLARE
     v_err JSONB;
@@ -1083,7 +1083,7 @@ CREATE OR REPLACE FUNCTION set_prompt_included(p_token TEXT, p_prompt_id UUID, p
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
+SET search_path = public, extensions
 AS $$
 DECLARE
     v_err JSONB;
@@ -1126,7 +1126,7 @@ CREATE OR REPLACE FUNCTION import_prompts(p_token TEXT, p_raw TEXT)
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
+SET search_path = public, extensions
 AS $$
 DECLARE
     v_err JSONB;
@@ -1195,7 +1195,7 @@ CREATE OR REPLACE FUNCTION start_game(p_token TEXT)
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
+SET search_path = public, extensions
 AS $$
 DECLARE
     v_err JSONB;
@@ -1290,7 +1290,7 @@ CREATE OR REPLACE FUNCTION submit_answer(p_token TEXT, p_body TEXT)
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
+SET search_path = public, extensions
 AS $$
 DECLARE
     v_err JSONB;
@@ -1357,7 +1357,7 @@ CREATE OR REPLACE FUNCTION submit_ranking(p_token TEXT, p_order UUID[])
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
+SET search_path = public, extensions
 AS $$
 DECLARE
     v_err JSONB;
@@ -1424,7 +1424,7 @@ CREATE OR REPLACE FUNCTION sync_room(p_token TEXT)
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
+SET search_path = public, extensions
 AS $$
 DECLARE
     v_err JSONB;
@@ -1447,7 +1447,7 @@ CREATE OR REPLACE FUNCTION skip_phase(p_token TEXT)
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
+SET search_path = public, extensions
 AS $$
 DECLARE
     v_err JSONB;
@@ -1483,7 +1483,7 @@ CREATE OR REPLACE FUNCTION next_round(p_token TEXT)
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
+SET search_path = public, extensions
 AS $$
 DECLARE
     v_err JSONB;
@@ -1533,7 +1533,7 @@ CREATE OR REPLACE FUNCTION play_again(p_token TEXT)
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
+SET search_path = public, extensions
 AS $$
 DECLARE
     v_err JSONB;
@@ -1578,7 +1578,7 @@ CREATE OR REPLACE FUNCTION end_game(p_token TEXT)
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
+SET search_path = public, extensions
 AS $$
 DECLARE
     v_err JSONB;
