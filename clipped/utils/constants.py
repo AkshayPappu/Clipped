@@ -20,26 +20,6 @@ PHASES = (
     PHASE_EXPIRED,
 )
 
-VERDICT_GEM = "gem"
-VERDICT_COMMON = "common"
-VERDICT_FAKE = "fake"
-VERDICT_NONE = "none"
-VERDICTS = (VERDICT_GEM, VERDICT_COMMON, VERDICT_FAKE)
-
-POINTS = {
-    VERDICT_GEM: 300,
-    VERDICT_COMMON: 100,
-    VERDICT_FAKE: 0,
-    VERDICT_NONE: 0,
-}
-
-VERDICT_LABEL = {
-    VERDICT_GEM: "Gem",
-    VERDICT_COMMON: "Common",
-    VERDICT_FAKE: "Fake news",
-    VERDICT_NONE: "No votes",
-}
-
 CATEGORY_ORDER = ("lore", "exposing", "deep_cuts", "brainrot", "legendary")
 
 CATEGORY_LABELS = {
@@ -69,8 +49,6 @@ MAX_IMPORT = 40
 
 ERR_HOST = "Only the host can do that."
 ERR_LOCKED = "Already locked in."
-ERR_SELF = "You can't vote on your own answer."
-ERR_VOTED = "You already voted on that."
 ERR_NAME = "That name's taken. Pick another."
 ERR_EXPIRED = "This room expired."
 ERR_MISSING = "That room doesn't exist."
@@ -83,7 +61,7 @@ ERR_NEED_QUESTIONS = "Not enough questions for that many rounds."
 ERR_SLOW = "Slow down a second."
 ERR_SESSION = "Session expired. Join again."
 ERR_TIME = "Time's up."
-ERR_VOTE = "That vote doesn't count."
+ERR_VOTE = "That order doesn't count."
 ERR_ANSWER = "Drop an answer first."
 ERR_LONG_ANSWER = "Keep it under 280 characters."
 ERR_PROMPT = "Questions need 10–240 characters."
@@ -99,7 +77,7 @@ ERR_CATEGORY = "Pick a real category."
 PHASE_TOAST = {
     PHASE_LOBBY: "The squad is assembling.",
     PHASE_PROMPT: "Cook something up.",
-    PHASE_VOTING: "Time to judge.",
+    PHASE_VOTING: "Put the best on top.",
     PHASE_LEADERBOARD: "The receipts are in.",
     PHASE_FINAL: "Absolutely clipped.",
 }

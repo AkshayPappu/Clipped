@@ -1,9 +1,9 @@
-"""Turns, answers, votes, and phase changes."""
+"""Turns, answers, rankings, and phase changes."""
 
 from __future__ import annotations
 
 from services.supabase_client import get_backend
-from utils.constants import ERR_ANSWER, ERR_VOTE, VERDICTS, clean_answer, fail
+from utils.constants import ERR_ANSWER, ERR_VOTE, clean_answer, fail
 
 
 def start_game(token: str) -> dict:
@@ -17,10 +17,10 @@ def submit_answer(token: str, body: str) -> dict:
     return get_backend().submit_answer(token, cleaned)
 
 
-def submit_vote(token: str, answer_id: str, verdict: str) -> dict:
-    if verdict not in VERDICTS or not answer_id:
+def submit_ranking(token: str, answer_ids: list[str]) -> dict:
+    if not answer_ids or len(answer_ids) != len(set(answer_ids)):
         return fail(ERR_VOTE)
-    return get_backend().submit_vote(token, answer_id, verdict)
+    return get_backend().submit_ranking(token, list(answer_ids))
 
 
 def sync_room(token: str) -> dict:

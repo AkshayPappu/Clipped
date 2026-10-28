@@ -6,7 +6,7 @@ import os
 
 import streamlit as st
 
-_WIDGET_PREFIXES = ("inc-", "edit-", "answer-")
+_WIDGET_PREFIXES = ("inc-", "edit-", "answer-", "order-")
 _WIDGET_KEYS = {
     "rounds",
     "answer_seconds",

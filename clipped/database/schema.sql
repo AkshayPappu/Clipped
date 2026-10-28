@@ -112,27 +112,48 @@ CREATE TABLE IF NOT EXISTS answers (
 
 CREATE INDEX IF NOT EXISTS answers_round_idx ON answers (round_id);
 
-CREATE TABLE IF NOT EXISTS votes (
+-- Ranking replaced per-answer category votes. Re-running this file on an
+-- older database drops those tables so the new functions have a place to write.
+DROP TABLE IF EXISTS votes CASCADE;
+DROP FUNCTION IF EXISTS submit_vote(TEXT, UUID, TEXT);
+DROP FUNCTION IF EXISTS _consensus(INTEGER, INTEGER, INTEGER);
+DROP FUNCTION IF EXISTS _reject_self_vote() CASCADE;
+
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'round_results'
+          AND column_name = 'gem_count'
+    ) THEN
+        DROP TABLE round_results CASCADE;
+    END IF;
+END $$;
+
+CREATE TABLE IF NOT EXISTS rankings (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    answer_id UUID NOT NULL REFERENCES answers (id) ON DELETE CASCADE,
+    round_id UUID NOT NULL REFERENCES rounds (id) ON DELETE CASCADE,
     voter_id UUID NOT NULL REFERENCES players (id) ON DELETE CASCADE,
-    verdict TEXT NOT NULL CHECK (verdict IN ('gem', 'common', 'fake')),
+    answer_id UUID NOT NULL REFERENCES answers (id) ON DELETE CASCADE,
+    position INTEGER NOT NULL CHECK (position >= 1),
     created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
-    UNIQUE (answer_id, voter_id)
+    UNIQUE (round_id, voter_id, position),
+    UNIQUE (round_id, voter_id, answer_id)
 );
 
-CREATE INDEX IF NOT EXISTS votes_answer_idx ON votes (answer_id);
+CREATE INDEX IF NOT EXISTS rankings_round_idx ON rankings (round_id, voter_id);
 
 CREATE TABLE IF NOT EXISTS round_results (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     round_id UUID NOT NULL REFERENCES rounds (id) ON DELETE CASCADE,
     answer_id UUID NOT NULL REFERENCES answers (id) ON DELETE CASCADE,
     player_id UUID NOT NULL REFERENCES players (id) ON DELETE CASCADE,
-    gem_count INTEGER NOT NULL CHECK (gem_count >= 0),
-    common_count INTEGER NOT NULL CHECK (common_count >= 0),
-    fake_count INTEGER NOT NULL CHECK (fake_count >= 0),
-    winning_verdict TEXT NOT NULL CHECK (winning_verdict IN ('gem', 'common', 'fake', 'none')),
-    points_awarded INTEGER NOT NULL CHECK (points_awarded IN (0, 100, 300)),
+    place INTEGER NOT NULL CHECK (place >= 0),
+    borda INTEGER NOT NULL CHECK (borda >= 0),
+    points_awarded INTEGER NOT NULL CHECK (points_awarded BETWEEN 0 AND 300),
+    tied BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
     UNIQUE (round_id, answer_id),
     UNIQUE (round_id, player_id)
@@ -151,7 +172,7 @@ ALTER TABLE prompts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE room_prompts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE rounds ENABLE ROW LEVEL SECURITY;
 ALTER TABLE answers ENABLE ROW LEVEL SECURITY;
-ALTER TABLE votes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE rankings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE round_results ENABLE ROW LEVEL SECURITY;
 
 -- ---------------------------------------------------------------------------
@@ -200,55 +221,17 @@ BEGIN
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION _consensus(p_gem INTEGER, p_common INTEGER, p_fake INTEGER)
-RETURNS TABLE(verdict TEXT, points INTEGER)
-LANGUAGE plpgsql
+CREATE OR REPLACE FUNCTION _place_points(p_place INTEGER, p_count INTEGER)
+RETURNS INTEGER
+LANGUAGE sql
 IMMUTABLE
 AS $$
-DECLARE
-    v_best INTEGER;
-BEGIN
-    IF coalesce(p_gem, 0) + coalesce(p_common, 0) + coalesce(p_fake, 0) = 0 THEN
-        verdict := 'none';
-        points := 0;
-        RETURN NEXT;
-        RETURN;
-    END IF;
-    v_best := GREATEST(p_gem, p_common, p_fake);
-    IF p_fake = v_best THEN
-        verdict := 'fake';
-        points := 0;
-    ELSIF p_common = v_best THEN
-        verdict := 'common';
-        points := 100;
-    ELSE
-        verdict := 'gem';
-        points := 300;
-    END IF;
-    RETURN NEXT;
-END;
+    SELECT CASE
+        WHEN p_count <= 0 OR p_place <= 0 THEN 0
+        WHEN p_count = 1 THEN 300
+        ELSE (300 * (p_count - p_place) + (p_count - 1) / 2) / (p_count - 1)
+    END;
 $$;
-
-CREATE OR REPLACE FUNCTION _reject_self_vote()
-RETURNS TRIGGER
-LANGUAGE plpgsql
-AS $$
-DECLARE
-    v_author UUID;
-BEGIN
-    SELECT player_id INTO v_author FROM answers WHERE id = NEW.answer_id;
-    IF v_author = NEW.voter_id THEN
-        RAISE EXCEPTION 'self_vote' USING ERRCODE = '23514';
-    END IF;
-    RETURN NEW;
-END;
-$$;
-
-DROP TRIGGER IF EXISTS votes_reject_self ON votes;
-CREATE TRIGGER votes_reject_self
-    BEFORE INSERT OR UPDATE ON votes
-    FOR EACH ROW
-    EXECUTE FUNCTION _reject_self_vote();
 
 CREATE OR REPLACE FUNCTION _throttle(p_player_id UUID, p_action TEXT)
 RETURNS JSONB
@@ -321,33 +304,69 @@ SET search_path = public
 AS $$
 BEGIN
     INSERT INTO round_results (
-        round_id, answer_id, player_id, gem_count, common_count, fake_count, winning_verdict, points_awarded
+        round_id, answer_id, player_id, place, borda, points_awarded, tied
     )
     SELECT
-        a.round_id,
-        a.id,
-        a.player_id,
-        coalesce(t.gem, 0),
-        coalesce(t.common, 0),
-        coalesce(t.fake, 0),
-        c.verdict,
-        c.points
-    FROM answers a
-    LEFT JOIN (
+        p_round_id,
+        scored.answer_id,
+        scored.player_id,
+        scored.place::INTEGER,
+        scored.borda,
+        CASE
+            WHEN scored.any_ballot THEN _place_points(scored.place::INTEGER, scored.answer_count::INTEGER)
+            ELSE 0
+        END,
+        scored.tied
+    FROM (
         SELECT
-            answer_id,
-            count(*) FILTER (WHERE verdict = 'gem')::INTEGER AS gem,
-            count(*) FILTER (WHERE verdict = 'common')::INTEGER AS common,
-            count(*) FILTER (WHERE verdict = 'fake')::INTEGER AS fake
-        FROM votes
-        GROUP BY answer_id
-    ) t ON t.answer_id = a.id
-    CROSS JOIN LATERAL _consensus(
-        coalesce(t.gem, 0),
-        coalesce(t.common, 0),
-        coalesce(t.fake, 0)
-    ) c
-    WHERE a.round_id = p_round_id
+            ranked.answer_id,
+            ranked.player_id,
+            ranked.borda,
+            ranked.any_ballot,
+            ranked.answer_count,
+            CASE
+                WHEN NOT ranked.any_ballot THEN 0
+                ELSE max(ranked.slot) OVER (PARTITION BY ranked.borda)
+            END AS place,
+            ranked.any_ballot AND ranked.tie_size > 1 AS tied
+        FROM (
+            SELECT
+                a.id AS answer_id,
+                a.player_id,
+                coalesce(b.borda, 0) AS borda,
+                EXISTS (SELECT 1 FROM rankings r WHERE r.round_id = p_round_id) AS any_ballot,
+                count(*) OVER () AS answer_count,
+                row_number() OVER (
+                    ORDER BY CASE
+                        WHEN EXISTS (SELECT 1 FROM rankings r WHERE r.round_id = p_round_id)
+                        THEN coalesce(b.borda, 0)
+                        ELSE -1
+                    END DESC,
+                    a.id
+                ) AS slot,
+                count(*) OVER (
+                    PARTITION BY CASE
+                        WHEN EXISTS (SELECT 1 FROM rankings r WHERE r.round_id = p_round_id)
+                        THEN coalesce(b.borda, 0)
+                        ELSE NULL
+                    END
+                ) AS tie_size
+            FROM answers a
+            LEFT JOIN (
+                SELECT r.answer_id, sum(sizes.ballot_size - r.position + 1)::INTEGER AS borda
+                FROM rankings r
+                JOIN (
+                    SELECT voter_id, count(*)::INTEGER AS ballot_size
+                    FROM rankings
+                    WHERE round_id = p_round_id
+                    GROUP BY voter_id
+                ) sizes ON sizes.voter_id = r.voter_id
+                WHERE r.round_id = p_round_id
+                GROUP BY r.answer_id
+            ) b ON b.answer_id = a.id
+            WHERE a.round_id = p_round_id
+        ) ranked
+    ) scored
     ON CONFLICT (round_id, answer_id) DO NOTHING;
 
     UPDATE rounds SET finalized = TRUE WHERE id = p_round_id AND NOT finalized;
@@ -408,14 +427,12 @@ BEGIN
             RETURN;
         END IF;
         SELECT count(*) INTO v_needed
-        FROM answers a
-        JOIN players p ON p.room_id = v_room.id AND p.left_at IS NULL AND p.id <> a.player_id
-        WHERE a.round_id = v_round.id;
-        SELECT count(*) INTO v_cast
-        FROM votes v
-        JOIN answers a ON a.id = v.answer_id AND a.round_id = v_round.id
-        JOIN players p ON p.id = v.voter_id AND p.left_at IS NULL AND p.room_id = v_room.id
-        WHERE v.voter_id <> a.player_id;
+        FROM players p
+        WHERE p.room_id = v_room.id AND p.left_at IS NULL;
+        SELECT count(DISTINCT r.voter_id) INTO v_cast
+        FROM rankings r
+        JOIN players p ON p.id = r.voter_id AND p.left_at IS NULL AND p.room_id = v_room.id
+        WHERE r.round_id = v_round.id;
         IF p_force OR v_cast >= v_needed OR (v_room.phase_deadline IS NOT NULL AND v_room.phase_deadline <= v_now) THEN
             PERFORM _finalize_round(v_round.id);
             UPDATE rooms SET status = 'leaderboard', phase_deadline = NULL WHERE id = v_room.id;
@@ -463,11 +480,11 @@ AS $$
             p.display_name,
             coalesce(sum(rr.points_awarded), 0)::INTEGER AS points,
             coalesce(sum(rr.points_awarded) FILTER (WHERE rr.round_id = p_round_id), 0)::INTEGER AS round_points,
-            coalesce(count(*) FILTER (WHERE rr.winning_verdict = 'gem'), 0)::INTEGER AS gems,
+            coalesce(count(*) FILTER (WHERE rr.place = 1 AND NOT rr.tied), 0)::INTEGER AS firsts,
             coalesce(sum(rr.points_awarded) FILTER (WHERE p_round_id IS NULL OR rr.round_id <> p_round_id), 0)::INTEGER AS prev_points,
             coalesce(count(*) FILTER (
-                WHERE rr.winning_verdict = 'gem' AND (p_round_id IS NULL OR rr.round_id <> p_round_id)
-            ), 0)::INTEGER AS prev_gems
+                WHERE rr.place = 1 AND NOT rr.tied AND (p_round_id IS NULL OR rr.round_id <> p_round_id)
+            ), 0)::INTEGER AS prev_firsts
         FROM players p
         LEFT JOIN round_results rr
             ON rr.player_id = p.id
@@ -478,15 +495,15 @@ AS $$
     ranked AS (
         SELECT
             *,
-            row_number() OVER (ORDER BY points DESC, gems DESC, lower(display_name)) AS rank,
-            row_number() OVER (ORDER BY prev_points DESC, prev_gems DESC, lower(display_name)) AS prev_rank
+            row_number() OVER (ORDER BY points DESC, firsts DESC, lower(display_name)) AS rank,
+            row_number() OVER (ORDER BY prev_points DESC, prev_firsts DESC, lower(display_name)) AS prev_rank
         FROM base
     )
     SELECT coalesce(jsonb_agg(jsonb_build_object(
         'rank', rank,
         'display_name', display_name,
         'points', points,
-        'gems', gems,
+        'firsts', firsts,
         'delta', prev_rank - rank,
         'round_points', round_points
     ) ORDER BY rank), '[]'::JSONB)
@@ -515,8 +532,7 @@ DECLARE
     v_best JSONB;
     v_winners JSONB;
     v_top INTEGER;
-    v_gems INTEGER;
-    v_fakes INTEGER;
+    v_firsts INTEGER;
     v_total INTEGER;
 BEGIN
     SELECT * INTO v_player FROM players WHERE id = p_player_id;
@@ -573,28 +589,27 @@ BEGIN
             'question', v_round.question_body,
             'category', v_round.category,
             'deadline', _iso(v_room.phase_deadline),
-            'votes_needed', (
+            'rankings_needed', (
                 SELECT count(*)
-                FROM answers a
-                JOIN players p ON p.room_id = v_room.id AND p.left_at IS NULL AND p.id <> a.player_id
-                WHERE a.round_id = v_round.id
+                FROM players p
+                WHERE p.room_id = v_room.id AND p.left_at IS NULL
             ),
-            'votes_cast', (
-                SELECT count(*)
-                FROM votes v
-                JOIN answers a ON a.id = v.answer_id AND a.round_id = v_round.id
-                JOIN players p ON p.id = v.voter_id AND p.left_at IS NULL
-                WHERE v.voter_id <> a.player_id
+            'rankings_in', (
+                SELECT count(DISTINCT r.voter_id)
+                FROM rankings r
+                JOIN players p ON p.id = r.voter_id AND p.left_at IS NULL
+                WHERE r.round_id = v_round.id
+            ),
+            'your_order', (
+                SELECT jsonb_agg(r.answer_id ORDER BY r.position)
+                FROM rankings r
+                WHERE r.round_id = v_round.id AND r.voter_id = v_player.id
             ),
             'answers', coalesce((
                 SELECT jsonb_agg(jsonb_build_object(
                     'id', a.id,
                     'body', a.body,
-                    'is_own', a.player_id = v_player.id,
-                    'your_vote', (
-                        SELECT v.verdict FROM votes v
-                        WHERE v.answer_id = a.id AND v.voter_id = v_player.id
-                    )
+                    'is_own', a.player_id = v_player.id
                 ) ORDER BY a.display_order, a.submitted_at)
                 FROM answers a
                 WHERE a.round_id = v_round.id
@@ -605,12 +620,10 @@ BEGIN
         SELECT coalesce(jsonb_agg(jsonb_build_object(
             'body', a.body,
             'author', pl.display_name,
-            'verdict', rr.winning_verdict,
+            'place', rr.place,
             'points', rr.points_awarded,
-            'gem', rr.gem_count,
-            'common', rr.common_count,
-            'fake', rr.fake_count
-        ) ORDER BY rr.points_awarded DESC, rr.gem_count DESC, a.display_order), '[]'::JSONB)
+            'tied', rr.tied
+        ) ORDER BY rr.points_awarded DESC, rr.place ASC, a.display_order), '[]'::JSONB)
         INTO v_reveals
         FROM round_results rr
         JOIN answers a ON a.id = rr.answer_id
@@ -637,7 +650,7 @@ BEGIN
             'body', a.body,
             'author', pl.display_name,
             'points', rr.points_awarded,
-            'verdict', rr.winning_verdict
+            'place', rr.place
         )
         INTO v_best
         FROM round_results rr
@@ -645,13 +658,12 @@ BEGIN
         JOIN players pl ON pl.id = rr.player_id
         JOIN rounds rd ON rd.id = rr.round_id
         WHERE rd.room_id = v_room.id
-        ORDER BY rr.points_awarded DESC, rr.gem_count DESC, a.submitted_at ASC, a.body ASC
+        ORDER BY rr.points_awarded DESC, rr.place ASC, a.submitted_at ASC, a.body ASC
         LIMIT 1;
         SELECT
-            count(*) FILTER (WHERE rr.winning_verdict = 'gem'),
-            count(*) FILTER (WHERE rr.winning_verdict = 'fake'),
+            count(*) FILTER (WHERE rr.place = 1 AND NOT rr.tied),
             count(*)
-        INTO v_gems, v_fakes, v_total
+        INTO v_firsts, v_total
         FROM round_results rr
         JOIN rounds rd ON rd.id = rr.round_id
         WHERE rd.room_id = v_room.id;
@@ -660,8 +672,7 @@ BEGIN
             'tied', jsonb_array_length(v_winners) > 1,
             'standings', v_standings,
             'best_answer', v_best,
-            'fake_news_count', coalesce(v_fakes, 0),
-            'gem_count', coalesce(v_gems, 0),
+            'firsts', coalesce(v_firsts, 0),
             'total_answers', coalesce(v_total, 0)
         );
     END IF;
@@ -1317,7 +1328,7 @@ BEGIN
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION submit_vote(p_token TEXT, p_answer_id UUID, p_verdict TEXT)
+CREATE OR REPLACE FUNCTION submit_ranking(p_token TEXT, p_order UUID[])
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -1330,9 +1341,10 @@ DECLARE
     v_is_host BOOLEAN;
     v_room rooms%ROWTYPE;
     v_round rounds%ROWTYPE;
-    v_answer answers%ROWTYPE;
-    v_existing TEXT;
+    v_existing UUID[];
+    v_expected UUID[];
     v_throttled JSONB;
+    v_index INTEGER;
 BEGIN
     SELECT err, player_id, room_id, is_host
     INTO v_err, v_player_id, v_room_id, v_is_host
@@ -1345,41 +1357,39 @@ BEGIN
     IF v_room.status <> 'voting' THEN
         RETURN _fail('Time''s up.');
     END IF;
-    IF p_verdict NOT IN ('gem', 'common', 'fake') THEN
-        RETURN _fail('That vote doesn''t count.');
-    END IF;
     SELECT * INTO v_round
     FROM rounds
     WHERE room_id = v_room_id AND round_number = v_room.current_round;
-    SELECT * INTO v_answer FROM answers WHERE id = p_answer_id;
-    IF NOT FOUND OR v_answer.round_id <> v_round.id THEN
-        RETURN _fail('That vote doesn''t count.');
+    SELECT coalesce(array_agg(id ORDER BY id), ARRAY[]::UUID[])
+    INTO v_expected
+    FROM answers
+    WHERE round_id = v_round.id;
+    IF p_order IS NULL
+        OR array_length(p_order, 1) IS NULL
+        OR array_length(p_order, 1) <> array_length(v_expected, 1)
+        OR (SELECT count(DISTINCT item) FROM unnest(p_order) item) <> array_length(p_order, 1)
+        OR (SELECT coalesce(array_agg(item ORDER BY item), ARRAY[]::UUID[]) FROM unnest(p_order) item) <> v_expected
+    THEN
+        RETURN _fail('That order doesn''t count.');
     END IF;
-    IF v_answer.player_id = v_player_id THEN
-        RETURN _fail('You can''t vote on your own answer.');
-    END IF;
-    SELECT verdict INTO v_existing
-    FROM votes
-    WHERE answer_id = p_answer_id AND voter_id = v_player_id;
-    IF FOUND THEN
-        IF v_existing = p_verdict THEN
+    SELECT coalesce(array_agg(answer_id ORDER BY position), ARRAY[]::UUID[])
+    INTO v_existing
+    FROM rankings
+    WHERE round_id = v_round.id AND voter_id = v_player_id;
+    IF array_length(v_existing, 1) IS NOT NULL THEN
+        IF v_existing = p_order THEN
             RETURN _build_view(v_player_id);
         END IF;
-        RETURN _fail('You already voted on that.');
+        RETURN _fail('Already locked in.');
     END IF;
-    v_throttled := _throttle(v_player_id, 'submit_vote:' || p_answer_id::TEXT);
+    v_throttled := _throttle(v_player_id, 'submit_ranking');
     IF v_throttled IS NOT NULL THEN
         RETURN v_throttled;
     END IF;
-    BEGIN
-        INSERT INTO votes (answer_id, voter_id, verdict)
-        VALUES (p_answer_id, v_player_id, p_verdict);
-    EXCEPTION
-        WHEN unique_violation THEN
-            RETURN _fail('You already voted on that.');
-        WHEN check_violation THEN
-            RETURN _fail('You can''t vote on your own answer.');
-    END;
+    FOR v_index IN 1..array_length(p_order, 1) LOOP
+        INSERT INTO rankings (round_id, voter_id, answer_id, position)
+        VALUES (v_round.id, v_player_id, p_order[v_index], v_index);
+    END LOOP;
     PERFORM _catch_up(v_room_id, FALSE);
     RETURN _build_view(v_player_id);
 END;
@@ -1600,12 +1610,12 @@ BEGIN
         JOIN pg_namespace n ON n.oid = p.pronamespace
         WHERE n.nspname = 'public'
           AND p.proname IN (
-            '_fail', '_iso', '_hash_token', '_clean_name', '_consensus', '_reject_self_vote',
+            '_fail', '_iso', '_hash_token', '_clean_name', '_place_points',
             '_throttle', '_lock_player', '_finalize_round', '_maybe_advance', '_catch_up',
             '_leaderboard_standings', '_build_view',
             'create_room', 'join_room', 'reconnect', 'leave_room', 'update_settings',
             'save_custom_prompt', 'delete_custom_prompt', 'set_prompt_included', 'import_prompts',
-            'start_game', 'submit_answer', 'submit_vote', 'sync_room', 'skip_phase',
+            'start_game', 'submit_answer', 'submit_ranking', 'sync_room', 'skip_phase',
             'next_round', 'play_again', 'end_game'
           )
     LOOP
@@ -1630,7 +1640,7 @@ BEGIN
             'import_prompts(text, text)',
             'start_game(text)',
             'submit_answer(text, text)',
-            'submit_vote(text, uuid, text)',
+            'submit_ranking(text, uuid[])',
             'sync_room(text)',
             'skip_phase(text)',
             'next_round(text)',

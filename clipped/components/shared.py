@@ -12,7 +12,7 @@ from pathlib import Path
 import streamlit as st
 
 from services import game_service
-from utils.constants import CATEGORY_LABELS, LOCAL_BANNER, VERDICT_LABEL
+from utils.constants import CATEGORY_LABELS, LOCAL_BANNER
 
 _CSS = Path(__file__).resolve().parents[1] / "styles" / "theme.css"
 
@@ -174,11 +174,36 @@ def category_label(key: str | None) -> str:
     return CATEGORY_LABELS.get(key, key)
 
 
-def verdict_line(reveal: dict) -> str:
-    label = VERDICT_LABEL.get(reveal["verdict"], reveal["verdict"])
-    points = int(reveal["points"])
+def ordinal(place: int) -> str:
+    if 10 <= place % 100 <= 20:
+        suffix = "th"
+    else:
+        suffix = {1: "st", 2: "nd", 3: "rd"}.get(place % 10, "th")
+    return f"{place}{suffix}"
+
+
+def place_line(reveal: dict) -> str:
+    place = int(reveal.get("place") or 0)
+    points = int(reveal.get("points") or 0)
     sign = f"+{format_points(points)}" if points else "+0"
+    if place <= 0:
+        label = "No rankings"
+    elif reveal.get("tied"):
+        label = f"Tied · {ordinal(place)}"
+    else:
+        label = ordinal(place)
     return f"{label} · {sign}"
+
+
+def reveal_class(reveal: dict) -> str:
+    place = int(reveal.get("place") or 0)
+    if place == 1 and not reveal.get("tied"):
+        return "gem"
+    if reveal.get("tied"):
+        return "common"
+    if place <= 0:
+        return "none"
+    return "lower"
 
 
 def host_skip(view: dict) -> None:

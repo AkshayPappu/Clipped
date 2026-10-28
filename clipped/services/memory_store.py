@@ -15,7 +15,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Callable
 
 from services.question_bank import load_builtin_prompts
-from services.scoring_service import consensus
+from services.scoring_service import score_ballots
 from utils.constants import (
     AWAY_SECONDS,
     CATEGORY_ORDER,
@@ -37,7 +37,6 @@ from utils.constants import (
     ERR_NEED_QUESTIONS,
     ERR_NOT_STARTED,
     ERR_PROMPT,
-    ERR_SELF,
     ERR_SESSION,
     ERR_SETTINGS,
     ERR_SKIP,
@@ -45,7 +44,6 @@ from utils.constants import (
     ERR_STARTED,
     ERR_TIME,
     ERR_VOTE,
-    ERR_VOTED,
     MAX_IMPORT,
     MAX_PLAYERS,
     MUTATION_GAP_MS,
@@ -58,8 +56,6 @@ from utils.constants import (
     ROOM_TTL_HOURS,
     ROUND_OPTIONS,
     TIMER_OPTIONS,
-    VERDICT_GEM,
-    VERDICTS,
     clean_answer,
     clean_categories,
     clean_code,
@@ -150,23 +146,14 @@ class Answer:
 
 
 @dataclass
-class Vote:
-    answer_id: str
-    voter_id: str
-    verdict: str
-    created_at: datetime
-
-
-@dataclass
 class Result:
     round_id: str
     answer_id: str
     player_id: str
-    gem: int
-    common: int
-    fake: int
-    verdict: str
+    place: int
     points: int
+    borda: int
+    tied: bool
 
 
 class MemoryStore:
@@ -183,7 +170,7 @@ class MemoryStore:
         self.hash_to_player: dict[str, str] = {}
         self.rounds: dict[str, Round] = {}
         self.answers: dict[str, Answer] = {}
-        self.votes: dict[str, Vote] = {}
+        self.rankings: dict[str, list[str]] = {}
         self.results: dict[str, Result] = {}
         self.prompts: dict[str, Prompt] = {}
         self.builtin_ids: list[str] = []
@@ -255,9 +242,9 @@ class MemoryStore:
         with self._lock:
             return self._submit_answer(token, body)
 
-    def submit_vote(self, token: str, answer_id: str, verdict: str) -> dict:
+    def submit_ranking(self, token: str, answer_ids: list[str]) -> dict:
         with self._lock:
-            return self._submit_vote(token, answer_id, verdict)
+            return self._submit_ranking(token, answer_ids)
 
     def sync_room(self, token: str) -> dict:
         with self._lock:
@@ -584,7 +571,7 @@ class MemoryStore:
         self._catch_up(room, now, force=False)
         return self._view(player, room)
 
-    def _submit_vote(self, token: str, answer_id: str, verdict: str) -> dict:
+    def _submit_ranking(self, token: str, answer_ids: list[str]) -> dict:
         player, room, error = self._auth(token)
         if error:
             return error
@@ -592,29 +579,22 @@ class MemoryStore:
         self._catch_up(room, self._now(), force=False)
         if room.status != PHASE_VOTING:
             return fail(ERR_TIME)
-        if verdict not in VERDICTS:
-            return fail(ERR_VOTE)
         rnd = self._current_round(room)
-        answer = self.answers.get(answer_id)
-        if rnd is None or answer is None or answer.round_id != rnd.id:
+        if rnd is None:
+            return fail(ERR_TIME)
+        expected = [answer.id for answer in self._round_answers(rnd.id)]
+        if not answer_ids or len(answer_ids) != len(set(answer_ids)) or set(answer_ids) != set(expected):
             return fail(ERR_VOTE)
-        if answer.player_id == player.id:
-            return fail(ERR_SELF)
-        key = _vote_key(answer.id, player.id)
-        existing = self.votes.get(key)
-        if existing:
-            if existing.verdict == verdict:
+        key = _ranking_key(rnd.id, player.id)
+        existing = self.rankings.get(key)
+        if existing is not None:
+            if existing == list(answer_ids):
                 return self._view(player, room)
-            return fail(ERR_VOTED)
-        blocked = self._throttle(player, f"submit_vote:{answer.id}")
+            return fail(ERR_LOCKED)
+        blocked = self._throttle(player, "submit_ranking")
         if blocked:
             return blocked
-        self.votes[key] = Vote(
-            answer_id=answer.id,
-            voter_id=player.id,
-            verdict=verdict,
-            created_at=self._now(),
-        )
+        self.rankings[key] = list(answer_ids)
         self._catch_up(room, self._now(), force=False)
         return self._view(player, room)
 
@@ -861,46 +841,37 @@ class MemoryStore:
             if rnd is None:
                 return
             deadline_hit = room.phase_deadline is not None and now >= room.phase_deadline
-            if force or self._votes_complete(room, rnd) or deadline_hit:
+            if force or self._rankings_complete(room, rnd) or deadline_hit:
                 self._finalize(rnd)
                 room.status = PHASE_LEADERBOARD
                 room.phase_deadline = None
 
-    def _votes_complete(self, room: Room, rnd: Round) -> bool:
+    def _rankings_complete(self, room: Room, rnd: Round) -> bool:
+        if not self._round_answers(rnd.id):
+            return False
         active = self._active_players(room.id)
-        needed = 0
-        cast = 0
-        for answer in self._round_answers(rnd.id):
-            for voter in active:
-                if voter.id == answer.player_id:
-                    continue
-                needed += 1
-                if _vote_key(answer.id, voter.id) in self.votes:
-                    cast += 1
-        return cast >= needed
+        return all(_ranking_key(rnd.id, voter.id) in self.rankings for voter in active)
 
     def _finalize(self, rnd: Round) -> None:
         if rnd.finalized:
             return
-        for answer in self._round_answers(rnd.id):
-            tallies = [
-                vote.verdict
-                for vote in self.votes.values()
-                if vote.answer_id == answer.id
-            ]
-            gem = tallies.count(VERDICT_GEM)
-            common = tallies.count("common")
-            fake = tallies.count("fake")
-            verdict, points = consensus(gem, common, fake)
+        answers = self._round_answers(rnd.id)
+        ballots = [
+            order
+            for key, order in self.rankings.items()
+            if key.startswith(f"{rnd.id}:")
+        ]
+        scored = {row["answer_id"]: row for row in score_ballots([answer.id for answer in answers], ballots)}
+        for answer in answers:
+            row = scored[answer.id]
             self.results[f"{rnd.id}:{answer.id}"] = Result(
                 round_id=rnd.id,
                 answer_id=answer.id,
                 player_id=answer.player_id,
-                gem=gem,
-                common=common,
-                fake=fake,
-                verdict=verdict,
-                points=points,
+                place=row["place"],
+                points=row["points"],
+                borda=row["borda"],
+                tied=row["tied"],
             )
         rnd.finalized = True
 
@@ -909,9 +880,9 @@ class MemoryStore:
         for round_id in round_ids:
             answer_ids = [answer.id for answer in self.answers.values() if answer.round_id == round_id]
             for answer_id in answer_ids:
-                for key in [key for key, vote in self.votes.items() if vote.answer_id == answer_id]:
-                    self.votes.pop(key, None)
                 self.answers.pop(answer_id, None)
+            for key in [key for key in self.rankings if key.startswith(f"{round_id}:")]:
+                self.rankings.pop(key, None)
             for key in [key for key, result in self.results.items() if result.round_id == round_id]:
                 self.results.pop(key, None)
             self.rounds.pop(round_id, None)
@@ -926,7 +897,7 @@ class MemoryStore:
     def _standings(self, room: Room, exclude_round_id: str | None = None) -> list[dict]:
         players = self._active_players(room.id)
         points = {player.id: 0 for player in players}
-        gems = {player.id: 0 for player in players}
+        firsts = {player.id: 0 for player in players}
         round_points = {player.id: 0 for player in players}
         current = self._current_round(room)
         for result in self._room_results(room.id):
@@ -935,17 +906,17 @@ class MemoryStore:
             if exclude_round_id and result.round_id == exclude_round_id:
                 continue
             points[result.player_id] += result.points
-            if result.verdict == VERDICT_GEM:
-                gems[result.player_id] += 1
+            if result.place == 1 and not result.tied:
+                firsts[result.player_id] += 1
             if current and result.round_id == current.id and exclude_round_id is None:
                 round_points[result.player_id] += result.points
-        ordered = sorted(players, key=lambda player: (-points[player.id], -gems[player.id], player.display_name.lower()))
+        ordered = sorted(players, key=lambda player: (-points[player.id], -firsts[player.id], player.display_name.lower()))
         return [
             {
                 "rank": index + 1,
                 "display_name": player.display_name,
                 "points": points[player.id],
-                "gems": gems[player.id],
+                "firsts": firsts[player.id],
                 "round_points": round_points[player.id],
                 "player_id": player.id,
             }
@@ -1026,21 +997,21 @@ class MemoryStore:
             }
         elif room.status == PHASE_VOTING and rnd:
             answers = self._round_answers(rnd.id)
-            needed, cast = self._vote_progress(room, rnd)
+            needed, cast = self._ranking_progress(room, rnd)
             payload["voting"] = {
                 "round_number": rnd.number,
                 "total_rounds": room.total_rounds,
                 "question": rnd.question,
                 "category": rnd.category,
                 "deadline": _iso(room.phase_deadline),
-                "votes_cast": cast,
-                "votes_needed": needed,
+                "rankings_in": cast,
+                "rankings_needed": needed,
+                "your_order": self.rankings.get(_ranking_key(rnd.id, player.id)),
                 "answers": [
                     {
                         "id": answer.id,
                         "body": answer.body,
                         "is_own": answer.player_id == player.id,
-                        "your_vote": self._your_vote(answer.id, player.id),
                     }
                     for answer in answers
                 ],
@@ -1051,22 +1022,10 @@ class MemoryStore:
             payload["final"] = self._final_payload(room)
         return payload
 
-    def _vote_progress(self, room: Room, rnd: Round) -> tuple[int, int]:
+    def _ranking_progress(self, room: Room, rnd: Round) -> tuple[int, int]:
         active = self._active_players(room.id)
-        needed = 0
-        cast = 0
-        for answer in self._round_answers(rnd.id):
-            for voter in active:
-                if voter.id == answer.player_id:
-                    continue
-                needed += 1
-                if _vote_key(answer.id, voter.id) in self.votes:
-                    cast += 1
-        return needed, cast
-
-    def _your_vote(self, answer_id: str, player_id: str) -> str | None:
-        vote = self.votes.get(_vote_key(answer_id, player_id))
-        return vote.verdict if vote else None
+        cast = sum(_ranking_key(rnd.id, voter.id) in self.rankings for voter in active)
+        return len(active), cast
 
     def _leaderboard_payload(self, room: Room, rnd: Round) -> dict:
         current = self._standings(room)
@@ -1087,15 +1046,13 @@ class MemoryStore:
                 {
                     "body": answer.body,
                     "author": author,
-                    "verdict": result.verdict,
+                    "place": result.place,
                     "points": result.points,
-                    "gem": result.gem,
-                    "common": result.common,
-                    "fake": result.fake,
+                    "tied": result.tied,
                     "order": answer.display_order,
                 }
             )
-        reveals.sort(key=lambda item: (-item["points"], -item["gem"], item["order"]))
+        reveals.sort(key=lambda item: (-item["points"], item["place"] or 10**9, item["order"]))
         for item in reveals:
             item.pop("order", None)
         return {
@@ -1121,7 +1078,7 @@ class MemoryStore:
         if results:
             def sort_key(result: Result) -> tuple:
                 answer = self.answers[result.answer_id]
-                return (-result.points, -result.gem, answer.submitted_at, answer.body)
+                return (-result.points, result.place or 10**9, answer.submitted_at, answer.body)
 
             chosen = min(results, key=sort_key)
             answer = self.answers[chosen.answer_id]
@@ -1129,15 +1086,14 @@ class MemoryStore:
                 "body": answer.body,
                 "author": self.players[answer.player_id].display_name,
                 "points": chosen.points,
-                "verdict": chosen.verdict,
+                "place": chosen.place,
             }
         return {
             "winners": winners,
             "tied": len(winners) > 1,
             "standings": standings,
             "best_answer": best,
-            "fake_news_count": sum(result.verdict == "fake" for result in results),
-            "gem_count": sum(result.verdict == VERDICT_GEM for result in results),
+            "firsts": sum(result.place == 1 and not result.tied for result in results),
             "total_answers": len(results),
         }
 
@@ -1146,5 +1102,5 @@ def _id() -> str:
     return str(__import__("uuid").uuid4())
 
 
-def _vote_key(answer_id: str, voter_id: str) -> str:
-    return f"{answer_id}:{voter_id}"
+def _ranking_key(round_id: str, voter_id: str) -> str:
+    return f"{round_id}:{voter_id}"

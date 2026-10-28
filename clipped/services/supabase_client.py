@@ -156,10 +156,10 @@ class SupabaseBackend:
     def submit_answer(self, token: str, body: str) -> dict:
         return self._rpc("submit_answer", {"p_token": token, "p_body": body})
 
-    def submit_vote(self, token: str, answer_id: str, verdict: str) -> dict:
+    def submit_ranking(self, token: str, answer_ids: list[str]) -> dict:
         return self._rpc(
-            "submit_vote",
-            {"p_token": token, "p_answer_id": answer_id, "p_verdict": verdict},
+            "submit_ranking",
+            {"p_token": token, "p_order": answer_ids},
         )
 
     def sync_room(self, token: str) -> dict:

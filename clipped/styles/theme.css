@@ -228,7 +228,8 @@ h1, h2, h3, p, label, span, div {
 }
 .verdict.gem { color: var(--lime); }
 .verdict.common { color: #ddd6fe; }
-.verdict.fake, .verdict.none { color: var(--muted); }
+.verdict.lower, .verdict.none { color: var(--muted); }
+.reveal.lower { opacity: 0.9; }
 
 .standing {
   display: flex;
@@ -316,20 +317,9 @@ button[kind="secondary"] {
 }
 button:disabled { opacity: 0.45 !important; }
 
-div[class*="st-key-gem-"] button {
-  background: var(--lime) !important;
-  color: #111 !important;
-  box-shadow: none !important;
-}
-div[class*="st-key-common-"] button {
-  background: #24183a !important;
-  color: white !important;
-  border: 1px solid rgba(168, 85, 247, 0.45) !important;
-}
-div[class*="st-key-fake-"] button {
-  background: #241016 !important;
-  color: #fecdd3 !important;
-  border: 1px solid rgba(251, 113, 133, 0.35) !important;
+div[class*="st-key-up-"] button,
+div[class*="st-key-down-"] button {
+  min-height: 44px !important;
 }
 
 [data-testid="stTextInput"] input,

@@ -1,41 +1,51 @@
 import pytest
 
-from services.scoring_service import consensus
-from utils.constants import POINTS
+from services.scoring_service import place_points, score_ballots
 
 
-def test_gem_wins_outright():
-    assert consensus(3, 1, 0) == ("gem", POINTS["gem"])
+def test_place_points_scale_from_best_to_worst():
+    assert place_points(1, 1) == 300
+    assert [place_points(place, 2) for place in (1, 2)] == [300, 0]
+    assert [place_points(place, 3) for place in (1, 2, 3)] == [300, 150, 0]
+    assert [place_points(place, 4) for place in (1, 2, 3, 4)] == [300, 200, 100, 0]
 
 
-def test_common_wins_outright():
-    assert consensus(1, 4, 2) == ("common", POINTS["common"])
+def test_agreed_order_scores_300_then_zero():
+    scored = score_ballots(["a", "b"], [["a", "b"], ["a", "b"]])
+    assert [(row["answer_id"], row["place"], row["points"], row["tied"]) for row in scored] == [
+        ("a", 1, 300, False),
+        ("b", 2, 0, False),
+    ]
 
 
-def test_fake_wins_outright():
-    assert consensus(0, 1, 3) == ("fake", 0)
+def test_split_order_ties_at_the_lower_score():
+    scored = score_ballots(["a", "b"], [["a", "b"], ["b", "a"]])
+    assert {row["answer_id"]: row["points"] for row in scored} == {"a": 0, "b": 0}
+    assert all(row["tied"] and row["place"] == 2 for row in scored)
 
 
-def test_tie_gem_and_common_scores_lower():
-    assert consensus(2, 2, 0) == ("common", 100)
+def test_three_way_order_gives_the_middle_150():
+    ballots = [["a", "b", "c"], ["a", "b", "c"], ["a", "b", "c"]]
+    scored = {row["answer_id"]: row for row in score_ballots(["a", "b", "c"], ballots)}
+    assert (scored["a"]["points"], scored["b"]["points"], scored["c"]["points"]) == (300, 150, 0)
 
 
-def test_tie_gem_and_fake_scores_lower():
-    assert consensus(2, 0, 2) == ("fake", 0)
+def test_tie_for_first_takes_the_worse_slot():
+    ballots = [["a", "b", "c"], ["b", "a", "c"]]
+    scored = {row["answer_id"]: row for row in score_ballots(["a", "b", "c"], ballots)}
+    assert scored["a"]["points"] == 150
+    assert scored["b"]["points"] == 150
+    assert scored["a"]["tied"] and scored["b"]["tied"]
+    assert scored["c"]["points"] == 0
+    assert scored["c"]["place"] == 3
+    assert not scored["c"]["tied"]
 
 
-def test_tie_common_and_fake_scores_lower():
-    assert consensus(0, 3, 3) == ("fake", 0)
+def test_no_ballots_score_nothing():
+    scored = score_ballots(["a", "b"], [])
+    assert all(row["points"] == 0 and row["place"] == 0 and not row["tied"] for row in scored)
 
 
-def test_three_way_tie_scores_zero():
-    assert consensus(1, 1, 1) == ("fake", 0)
-
-
-def test_zero_votes_are_unrated():
-    assert consensus(0, 0, 0) == ("none", 0)
-
-
-def test_negative_counts_rejected():
+def test_ballot_must_rank_every_answer():
     with pytest.raises(ValueError):
-        consensus(-1, 0, 0)
+        score_ballots(["a", "b"], [["a"]])

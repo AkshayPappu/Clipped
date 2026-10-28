@@ -8,11 +8,10 @@ from utils.constants import (
     ERR_LOCKED,
     ERR_NAME,
     ERR_NEED_PLAYERS,
-    ERR_SELF,
     ERR_SESSION,
     ERR_SLOW,
     ERR_STARTED,
-    ERR_VOTED,
+    ERR_VOTE,
     MAX_PLAYERS,
 )
 
@@ -119,75 +118,101 @@ def test_duplicate_answer_is_idempotent_then_rejected(store: MemoryStore):
     assert guest["prompt"]["submitted_count"] == 1
 
 
-def test_self_vote_and_duplicate_vote(store: MemoryStore):
+def test_ranking_must_include_every_answer_and_then_locks(store: MemoryStore):
     tokens, _code = open_room(store, ["Ann", "Bea"], start=True)
     store.submit_answer(tokens[0], "alpha answer")
     view = store.submit_answer(tokens[1], "beta answer")
     assert view["room"]["status"] == "voting"
-    own = next(answer for answer in view["voting"]["answers"] if answer["is_own"])
-    other = next(answer for answer in view["voting"]["answers"] if not answer["is_own"])
-    assert "author" not in own and "player_id" not in own
-    assert store.submit_vote(tokens[1], own["id"], "gem")["error"] == ERR_SELF
-    assert store.submit_vote(tokens[1], other["id"], "gem")["ok"]
-    assert store.submit_vote(tokens[1], other["id"], "gem")["ok"]
-    changed = store.submit_vote(tokens[1], other["id"], "fake")
-    assert changed["error"] == ERR_VOTED
+    answers = view["voting"]["answers"]
+    assert all("author" not in answer and "player_id" not in answer for answer in answers)
+    order = [answer["id"] for answer in answers]
+    assert store.submit_ranking(tokens[1], order[:1])["error"] == ERR_VOTE
+    assert store.submit_ranking(tokens[1], order + [order[0]])["error"] == ERR_VOTE
+    assert store.submit_ranking(tokens[1], order)["ok"]
+    assert store.submit_ranking(tokens[1], order)["ok"]
+    changed = store.submit_ranking(tokens[1], list(reversed(order)))
+    assert changed["error"] == ERR_LOCKED
+    locked = store.sync_room(tokens[1])
+    assert locked["room"]["status"] == "voting"
+    assert locked["voting"]["your_order"] == order
+    assert "alpha answer" in json.dumps(locked["voting"])
+    assert "author" not in json.dumps(locked["voting"])
 
 
-def test_tie_breaks_to_lower_score(store: MemoryStore):
-    tokens, _code = open_room(store, ["Ann", "Bea", "Cy"], start=True)
-    store.submit_answer(tokens[0], "the parking lot incident")
-    voting = store.skip_phase(tokens[0])
-    answer_id = voting["voting"]["answers"][0]["id"]
-    store.submit_vote(tokens[1], answer_id, "gem")
-    board = store.submit_vote(tokens[2], answer_id, "common")
-    reveal = board["leaderboard"]["reveals"][0]
-    assert reveal["verdict"] == "common"
-    assert reveal["points"] == 100
-    assert reveal["author"] == "Ann"
+def test_agreed_order_scores_best_then_worst(store: MemoryStore):
+    tokens, _code = open_room(store, ["Ann", "Bea"], start=True)
+    store.submit_answer(tokens[0], "alpha answer")
+    view = store.submit_answer(tokens[1], "beta answer")
+    by_body = {answer["body"]: answer["id"] for answer in view["voting"]["answers"]}
+    order = [by_body["alpha answer"], by_body["beta answer"]]
+    store.submit_ranking(tokens[0], order)
+    board = store.submit_ranking(tokens[1], order)
+    reveals = {item["body"]: item for item in board["leaderboard"]["reveals"]}
+    assert reveals["alpha answer"]["author"] == "Ann"
+    assert reveals["alpha answer"]["place"] == 1
+    assert reveals["alpha answer"]["points"] == 300
+    assert reveals["alpha answer"]["tied"] is False
+    assert reveals["beta answer"]["points"] == 0
+    assert reveals["beta answer"]["place"] == 2
     assert board["leaderboard"]["standings"][0]["display_name"] == "Ann"
+    assert board["leaderboard"]["standings"][0]["points"] == 300
+    assert board["leaderboard"]["standings"][0]["firsts"] == 1
 
 
-def test_gem_fake_tie_is_fake(store: MemoryStore):
+def test_split_rankings_tie_at_the_lower_score(store: MemoryStore):
+    tokens, _code = open_room(store, ["Ann", "Bea"], start=True)
+    store.submit_answer(tokens[0], "alpha answer")
+    view = store.submit_answer(tokens[1], "beta answer")
+    by_body = {answer["body"]: answer["id"] for answer in view["voting"]["answers"]}
+    store.submit_ranking(tokens[0], [by_body["alpha answer"], by_body["beta answer"]])
+    board = store.submit_ranking(tokens[1], [by_body["beta answer"], by_body["alpha answer"]])
+    assert all(
+        item["points"] == 0 and item["tied"] and item["place"] == 2
+        for item in board["leaderboard"]["reveals"]
+    )
+    assert all(row["firsts"] == 0 for row in board["leaderboard"]["standings"])
+
+
+def test_middle_place_scores_150(store: MemoryStore):
     tokens, _code = open_room(store, ["Ann", "Bea", "Cy"], start=True)
-    store.submit_answer(tokens[0], "a suspicious story")
-    voting = store.skip_phase(tokens[0])
-    answer_id = voting["voting"]["answers"][0]["id"]
-    store.submit_vote(tokens[1], answer_id, "gem")
-    board = store.submit_vote(tokens[2], answer_id, "fake")
-    reveal = board["leaderboard"]["reveals"][0]
-    assert reveal["verdict"] == "fake"
-    assert reveal["points"] == 0
+    store.submit_answer(tokens[0], "alpha")
+    store.submit_answer(tokens[1], "beta")
+    view = store.submit_answer(tokens[2], "gamma")
+    by_body = {answer["body"]: answer["id"] for answer in view["voting"]["answers"]}
+    order = [by_body["alpha"], by_body["beta"], by_body["gamma"]]
+    board = None
+    for token in tokens:
+        board = store.submit_ranking(token, order)
+    reveals = {item["body"]: item for item in board["leaderboard"]["reveals"]}
+    assert (reveals["alpha"]["points"], reveals["beta"]["points"], reveals["gamma"]["points"]) == (300, 150, 0)
+    assert reveals["alpha"]["author"] == "Ann"
 
 
-def test_clear_gem_scores_300(store: MemoryStore):
+def test_single_answer_is_first_when_ranked(store: MemoryStore):
     tokens, _code = open_room(store, ["Ann", "Bea", "Cy"], start=True)
     store.submit_answer(tokens[0], "legendary parking lot")
     voting = store.skip_phase(tokens[0])
     answer_id = voting["voting"]["answers"][0]["id"]
-    store.submit_vote(tokens[1], answer_id, "gem")
-    board = store.submit_vote(tokens[2], answer_id, "gem")
+    store.submit_ranking(tokens[0], [answer_id])
+    store.submit_ranking(tokens[1], [answer_id])
+    board = store.submit_ranking(tokens[2], [answer_id])
     reveal = board["leaderboard"]["reveals"][0]
-    assert reveal == {
-        **reveal,
-        "verdict": "gem",
-        "points": 300,
-        "gem": 2,
-        "common": 0,
-        "fake": 0,
-    }
-    no_answer = next(row for row in board["leaderboard"]["standings"] if row["display_name"] == "Bea")
-    assert no_answer["points"] == 0
+    assert reveal["author"] == "Ann"
+    assert reveal["place"] == 1
+    assert reveal["points"] == 300
+    assert reveal["tied"] is False
+    quiet = next(row for row in board["leaderboard"]["standings"] if row["display_name"] == "Bea")
+    assert quiet["points"] == 0
 
 
-def test_zero_vote_answers_score_nothing(store: MemoryStore):
+def test_zero_rankings_score_nothing(store: MemoryStore):
     tokens, _code = open_room(store, ["Ann", "Bea"], start=True)
     store.submit_answer(tokens[0], "alpha answer")
     store.submit_answer(tokens[1], "beta answer")
     board = store.skip_phase(tokens[0])
     assert board["room"]["status"] == "leaderboard"
     assert board["leaderboard"]["reveals"]
-    assert all(item["points"] == 0 and item["verdict"] == "none" for item in board["leaderboard"]["reveals"])
+    assert all(item["points"] == 0 and item["place"] == 0 for item in board["leaderboard"]["reveals"])
 
 
 def test_no_submission_scores_zero(store: MemoryStore):

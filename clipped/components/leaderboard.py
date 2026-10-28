@@ -13,10 +13,11 @@ from components.shared import (
     poll_view,
     primary,
     reconnecting,
+    place_line,
     render_standings,
+    reveal_class,
     secondary,
     show_round_label,
-    verdict_line,
 )
 from services import game_service
 from utils.session import clear_seat
@@ -36,14 +37,13 @@ def render_leaderboard() -> None:
     if not reveals:
         st.markdown('<p class="hint">Nobody locked an answer in.</p>', unsafe_allow_html=True)
     for reveal in reveals:
-        klass = reveal.get("verdict") or "none"
+        klass = reveal_class(reveal)
         st.markdown(
             f"""
             <div class="reveal {esc(klass)}">
-              <div class="verdict {esc(klass)}">{esc(verdict_line(reveal))}</div>
+              <div class="verdict {esc(klass)}">{esc(place_line(reveal))}</div>
               <p class="answer-body">{esc(reveal["body"])}</p>
               <p class="byline">Submitted by {esc(reveal["author"])}</p>
-              <p class="split">{int(reveal["gem"])} Gem · {int(reveal["common"])} Common · {int(reveal["fake"])} Fake news</p>
             </div>
             """,
             unsafe_allow_html=True,
@@ -96,8 +96,7 @@ def render_final() -> None:
     st.markdown(
         f"""
         <div class="stat-grid">
-          <div><div class="stat-label">Gems</div><div class="stat-value">{int(final.get("gem_count") or 0)}</div></div>
-          <div><div class="stat-label">Fake news</div><div class="stat-value">{int(final.get("fake_news_count") or 0)}</div></div>
+          <div><div class="stat-label">Firsts</div><div class="stat-value">{int(final.get("firsts") or 0)}</div></div>
           <div><div class="stat-label">Answers</div><div class="stat-value">{int(final.get("total_answers") or 0)}</div></div>
           <div><div class="stat-label">Best line</div><div class="stat-value" style="font-size:1rem">{best_html}</div></div>
         </div>

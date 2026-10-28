@@ -71,7 +71,7 @@ def _host_setup(view: dict) -> None:
     st.markdown('<h2 class="section-title">Setup</h2>', unsafe_allow_html=True)
     rounds = st.selectbox("Rounds", list(ROUND_OPTIONS), key="rounds")
     answer_seconds = st.selectbox("Answer timer", list(TIMER_OPTIONS), key="answer_seconds", format_func=lambda n: f"{n} seconds")
-    vote_seconds = st.selectbox("Voting timer", list(TIMER_OPTIONS), key="vote_seconds", format_func=lambda n: f"{n} seconds")
+    vote_seconds = st.selectbox("Ranking timer", list(TIMER_OPTIONS), key="vote_seconds", format_func=lambda n: f"{n} seconds")
     categories = st.multiselect(
         "Question packs",
         options=list(CATEGORY_ORDER),

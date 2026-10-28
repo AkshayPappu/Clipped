@@ -2,7 +2,7 @@
 
 Only the real ones know.
 
-Clipped is a phone-first party game for a friend group. Someone opens a room, everyone else joins with a four-digit code, and you take turns answering prompts about your own lore. Answers stay anonymous while people vote **Gem** (300), **Common** (100), or **Fake news** (0). The room's consensus is the score.
+Clipped is a phone-first party game for a friend group. Someone opens a room, everyone else joins with a four-digit code, and you take turns answering prompts about your own lore. Answers stay anonymous while the room ranks them from best to worst. The server turns that order into points.
 
 ## Play locally
 
@@ -26,14 +26,14 @@ The phase lives in the database (or the local store). Phones do not decide it th
 - Everyone gets the same prompt and a countdown.
 - One answer per player. You can't see anyone else's text yet.
 - The phase ends when every active player has submitted, the host ends it, or the server clock hits the deadline. A missing host does not freeze a timer.
-- Voting is anonymous and shuffled. You can't vote on your own answer, and you can't change a vote.
-- The leaderboard reveals authors, the vote split, and the score. The host starts the next round.
+- Ranking is anonymous. Put every answer in order, best at the top, including your own. You can't change it after you lock it in.
+- The leaderboard reveals authors, the consensus place, and the points. The host starts the next round.
 - The last round ends on a winner screen. **Play again** keeps the squad. **New room** leaves.
 
 Host setup, before start:
 
 - 5, 10, 15, or 20 rounds
-- 30, 45, 60, or 90 seconds for answers and for voting
+- 30, 45, 60, or 90 seconds for answers and for ranking
 - Packs: friend-group lore, exposing the group, deep cuts, brainrot, legendary moments
 - Random or in-order questions
 - Custom questions, including a paste of one question per line
@@ -42,13 +42,14 @@ The built-in bank has 110 prompts in [`clipped/database/seed.sql`](clipped/datab
 
 ## Scoring
 
-Counted per answer, on the server, never from the phone:
+Players never send a score. They send an order, best to worst, and the server scores it:
 
-1. Tally Gem, Common, and Fake news.
-2. The category with the most votes wins.
-3. A tie goes to the **lower** score, so a split room can't inflate a Gem. Gem + Common → 100. Anything tied with Fake news → 0.
-4. No eligible votes → 0, labeled "No votes" rather than Fake news.
-5. No answer → 0 for that round.
+1. Each ranking gives the top answer the most weight and the bottom answer the least (Borda).
+2. Those weights are added up into one room order.
+3. Best place is 300. Worst place is 0. The places in between are even steps (three answers: 300, 150, 0).
+4. A tie takes the **lower** place in the tie, so a split room cannot inflate a score. Two answers that split the ranking both get 0.
+5. Nobody ranked anything → 0.
+6. No answer → 0 for that round.
 
 ## Project layout
 
@@ -73,7 +74,7 @@ Create a project, then in the SQL editor run, in order:
 1. [`clipped/database/schema.sql`](clipped/database/schema.sql)
 2. [`clipped/database/seed.sql`](clipped/database/seed.sql)
 
-The schema turns on row-level security and does not add policies for the public anon key, so that key cannot read answers or votes. The Streamlit server uses the **service role** key and only calls RPCs. Those functions check a player session token, lock the room row, and return a view that matches the phase. Prompt views do not include other people's answers. Voting views do not include authors.
+The schema turns on row-level security and does not add policies for the public anon key, so that key cannot read answers or rankings. The Streamlit server uses the **service role** key and only calls RPCs. Those functions check a player session token, lock the room row, and return a view that matches the phase. Prompt views do not include other people's answers. Voting views do not include authors.
 
 Copy the project URL and service role key into `.streamlit/secrets.toml` (do not commit it) or into the environment. [`clipped/.env.example`](clipped/.env.example):
 
@@ -112,7 +113,7 @@ The answer box sits **outside** that polling fragment, inside a form, so typing 
 
 Streamlit component iframes can't reliably share the parent page's `localStorage`, so a player token is kept in a `sid` query param on **your** URL. The copied invite is only `?room=`. Refreshing keeps your seat. Sharing the address bar would share your seat — use **Copy invite link**.
 
-Rate limiting is per action (300ms), not one bucket for the whole token. Otherwise starting the game would block the host's answer, and voting several cards quickly would stall. Duplicate answers and votes are rejected by uniqueness checks even when the throttle is off. Distinct votes aren't throttled against each other.
+Rate limiting is per action (300ms), not one bucket for the whole token. Otherwise starting the game would block the host's answer. Duplicate answers and a changed ranking are rejected even when the throttle is off. Moving cards around is local until you lock the order in.
 
 ## Tests
 
@@ -120,7 +121,7 @@ Rate limiting is per action (300ms), not one bucket for the whole token. Otherwi
 pytest
 ```
 
-The suite covers room-code collisions, duplicate names, expired rooms, host-only actions, hidden answers, duplicate answers and votes, self-votes, consensus and tie-breaks, zero-vote answers, concurrent submits, timer expiry without the host, double phase advance, reconnection, and the question bank.
+The suite covers room-code collisions, duplicate names, expired rooms, host-only actions, hidden answers, duplicate answers, locked rankings, place points and tie-breaks, unranked answers, concurrent submits, timer expiry without the host, double phase advance, reconnection, and the question bank.
 
 Postgres checks are the SQL functions in `schema.sql`. With a local database named `clipped`:
 
