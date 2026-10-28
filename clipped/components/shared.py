@@ -106,21 +106,21 @@ def copy_row(items: list[tuple[str, str]]) -> None:
     st.html(
         f"""
         <style>
+          @import url("https://fonts.googleapis.com/css2?family=Geist:wght@500&display=swap");
           .copy-row {{ display: flex; gap: 8px; margin: 2px 0 0; }}
           .copy-row button {{
             flex: 1;
-            min-height: 40px;
-            border: 2px solid #120e0b;
-            border-radius: 2px;
+            min-height: 42px;
+            border: 0;
+            border-radius: 999px;
             appearance: none;
-            background-color: #2a241c;
-            color: #f3ece2;
-            box-shadow: 0 3px 0 #120e0b;
-            font: 600 14px "IBM Plex Mono", ui-monospace, monospace;
+            background: #1c1c20;
+            color: #f4f4f5;
+            box-shadow: none;
+            font: 500 14px Geist, sans-serif;
             cursor: pointer;
           }}
-          .copy-row button:hover {{ background-color: #342c24; }}
-          .copy-row button:active {{ transform: translateY(2px); box-shadow: 0 1px 0 #120e0b; }}
+          .copy-row button:hover {{ background: rgba(255,255,255,0.14); }}
         </style>
         <div class="copy-row">{"".join(buttons)}</div>
         <script>
