@@ -73,34 +73,57 @@ def secondary(label: str, key: str) -> bool:
     return st.button(label, key=key, type="secondary", width="stretch")
 
 
-def copy_button(text: str, label: str) -> None:
-    digest = hashlib.sha256(f"{label}:{text}".encode("utf-8")).hexdigest()[:12]
-    element_id = f"copy-{digest}"
-    payload = json.dumps(text)
-    label_js = json.dumps(label)
+def copy_row(items: list[tuple[str, str]]) -> None:
+    buttons = []
+    binders = []
+    for label, text in items:
+        digest = hashlib.sha256(f"{label}:{text}".encode("utf-8")).hexdigest()[:12]
+        element_id = f"copy-{digest}"
+        buttons.append(f'<button id="{element_id}" type="button">{html.escape(label)}</button>')
+        binders.append(
+            f"""
+            const btn_{digest} = document.getElementById("{element_id}");
+            if (btn_{digest} && !btn_{digest}.dataset.bound) {{
+              btn_{digest}.dataset.bound = "1";
+              btn_{digest}.addEventListener("click", async () => {{
+                const value = {json.dumps(text)};
+                try {{
+                  await navigator.clipboard.writeText(value);
+                }} catch (err) {{
+                  const area = document.createElement("textarea");
+                  area.value = value;
+                  document.body.appendChild(area);
+                  area.select();
+                  document.execCommand("copy");
+                  area.remove();
+                }}
+                btn_{digest}.textContent = "Copied";
+                setTimeout(() => {{ btn_{digest}.textContent = {json.dumps(label)}; }}, 1200);
+              }});
+            }}
+            """
+        )
     st.html(
         f"""
-        <button id="{element_id}" type="button" style="width:100%;min-height:48px;margin:0.25rem 0;border:1px solid #34343f;border-radius:16px;background:#1a1a24;color:white;font:700 16px Outfit,sans-serif;cursor:pointer;">{html.escape(label)}</button>
-        <script>
-          const btn = document.getElementById("{element_id}");
-          if (btn && !btn.dataset.bound) {{
-            btn.dataset.bound = "1";
-            btn.addEventListener("click", async () => {{
-              const value = {payload};
-              try {{
-                await navigator.clipboard.writeText(value);
-              }} catch (err) {{
-                const area = document.createElement("textarea");
-                area.value = value;
-                document.body.appendChild(area);
-                area.select();
-                document.execCommand("copy");
-                area.remove();
-              }}
-              btn.textContent = "Copied";
-              setTimeout(() => {{ btn.textContent = {label_js}; }}, 1200);
-            }});
+        <style>
+          .copy-row {{ display: flex; gap: 8px; margin: 2px 0 0; }}
+          .copy-row button {{
+            flex: 1;
+            min-height: 40px;
+            border: 0;
+            border-radius: 999px;
+            appearance: none;
+            background-color: transparent;
+            color: #c9c9d2;
+            font: 600 15px "Outfit", system-ui, sans-serif;
+            letter-spacing: -0.02em;
+            cursor: pointer;
           }}
+          .copy-row button:hover {{ color: white; }}
+        </style>
+        <div class="copy-row">{"".join(buttons)}</div>
+        <script>
+          {" ".join(binders)}
         </script>
         """,
         unsafe_allow_javascript=True,
@@ -197,17 +220,18 @@ def spots_html(reveal: dict) -> str:
     return f'<div class="spots" aria-label="Votes by spot">{"".join(pills)}</div>'
 
 
-def place_line(reveal: dict) -> str:
+def place_label(reveal: dict) -> str:
     place = int(reveal.get("place") or 0)
-    points = int(reveal.get("points") or 0)
-    sign = f"+{format_points(points)}" if points else "+0"
     if place <= 0:
-        label = "No rankings"
-    elif reveal.get("tied"):
-        label = f"Tied · {ordinal(place)}"
-    else:
-        label = ordinal(place)
-    return f"{label} · {sign}"
+        return "No rankings"
+    if reveal.get("tied"):
+        return f"Tied · {ordinal(place)}"
+    return ordinal(place)
+
+
+def points_label(reveal: dict) -> str:
+    points = int(reveal.get("points") or 0)
+    return f"+{format_points(points)}" if points else "+0"
 
 
 def reveal_class(reveal: dict) -> str:

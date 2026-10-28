@@ -13,7 +13,8 @@ from components.shared import (
     poll_view,
     primary,
     reconnecting,
-    place_line,
+    place_label,
+    points_label,
     render_standings,
     spots_html,
     reveal_class,
@@ -46,9 +47,12 @@ def render_leaderboard() -> None:
         st.markdown(
             f"""
             <div class="reveal {esc(klass)}">
-              <div class="verdict {esc(klass)}">{esc(place_line(reveal))}</div>
+              <div class="tile-top">
+                <span class="verdict {esc(klass)}">{esc(place_label(reveal))}</span>
+                <span class="tile-pay">{esc(points_label(reveal))}</span>
+              </div>
               <p class="answer-body">{esc(reveal["body"])}</p>
-              <p class="byline">Submitted by {esc(reveal["author"])}</p>
+              <p class="byline">{esc(reveal["author"])}</p>
               {spots_html(reveal)}
             </div>
             """,

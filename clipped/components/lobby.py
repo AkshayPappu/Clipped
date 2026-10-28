@@ -7,7 +7,7 @@ from datetime import timedelta
 import streamlit as st
 
 from components.shared import (
-    copy_button,
+    copy_row,
     poll_view,
     primary,
     reconnecting,
@@ -40,14 +40,12 @@ def render_lobby(view: dict) -> None:
         <div class="code-block">
           <div class="code-label">Room code</div>
           <div class="code-value">{code}</div>
-          <p class="code-hint">Send this code to your friends.</p>
-          <p class="invite-link">{link}</p>
+          <p class="code-hint">Send this to the group.</p>
         </div>
         """,
         unsafe_allow_html=True,
     )
-    copy_button(code, "Copy code")
-    copy_button(link, "Copy invite link")
+    copy_row([("Copy code", code), ("Copy invite", link)])
     st.markdown(
         '<p class="hint">Copy the invite link. The address bar is your seat, not the invite.</p>',
         unsafe_allow_html=True,

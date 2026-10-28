@@ -30,7 +30,7 @@ def render_voting() -> None:
     voting = view.get("voting") or {}
     show_round_label(voting.get("round_number", 1), voting.get("total_rounds", 1), voting.get("category"))
     st.markdown(f'<h2 class="question">{esc(voting.get("question"))}</h2>', unsafe_allow_html=True)
-    st.markdown('<p class="eyebrow">Best on top, worst on the bottom</p>', unsafe_allow_html=True)
+    st.markdown('<p class="hint">Best on top, worst on the bottom.</p>', unsafe_allow_html=True)
     render_timer(view.get("server_now"), voting.get("deadline"), view["room"]["vote_seconds"])
     render_progress(
         int(voting.get("rankings_in") or 0),
@@ -63,13 +63,14 @@ def _editor(view: dict, answers: list[dict]) -> None:
     )
     for index, answer_id in enumerate(order):
         answer = known[answer_id]
-        yours = " · Yours" if answer.get("is_own") else ""
+        yours = '<span class="yours">Yours</span>' if answer.get("is_own") else ""
         paid = place_points(index + 1, len(order))
         st.markdown(
             f"""
             <div class="answer-card">
-              <p class="eyebrow">#{index + 1} · +{paid}{yours}</p>
+              <div class="tile-top"><span class="tile-rank">{index + 1:02d}</span><span class="tile-pay">+{paid}</span></div>
               <p class="answer-body">{esc(answer["body"])}</p>
+              {yours}
             </div>
             """,
             unsafe_allow_html=True,
@@ -103,13 +104,14 @@ def _locked(answers: list[dict], order: list[str]) -> None:
         answer = known.get(answer_id)
         if answer is None:
             continue
-        yours = " · Yours" if answer.get("is_own") else ""
+        yours = '<span class="yours">Yours</span>' if answer.get("is_own") else ""
         paid = place_points(index + 1, len(order))
         st.markdown(
             f"""
-            <div class="answer-card">
-              <p class="eyebrow">#{index + 1} · +{paid}{yours}</p>
+            <div class="answer-card locked-card">
+              <div class="tile-top"><span class="tile-rank">{index + 1:02d}</span><span class="tile-pay">+{paid}</span></div>
               <p class="answer-body">{esc(answer["body"])}</p>
+              {yours}
             </div>
             """,
             unsafe_allow_html=True,
