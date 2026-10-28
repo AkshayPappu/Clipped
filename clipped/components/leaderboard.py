@@ -33,6 +33,10 @@ def render_leaderboard() -> None:
     show_round_label(board.get("round_number", 1), board.get("total_rounds", 1), board.get("category"))
     st.markdown('<p class="eyebrow">The receipts are in</p>', unsafe_allow_html=True)
     st.markdown(f'<h2 class="question">{esc(board.get("question"))}</h2>', unsafe_allow_html=True)
+    st.markdown(
+        '<p class="hint">Each ranking pays the spot it put this answer in. The total is the score.</p>',
+        unsafe_allow_html=True,
+    )
     reveals = board.get("reveals") or []
     if not reveals:
         st.markdown('<p class="hint">Nobody locked an answer in.</p>', unsafe_allow_html=True)

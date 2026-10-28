@@ -18,6 +18,7 @@ from components.shared import (
     show_round_label,
 )
 from services import game_service
+from services.scoring_service import place_points
 
 
 @st.fragment(run_every=timedelta(seconds=1.5))
@@ -57,16 +58,17 @@ def _editor(view: dict, answers: list[dict]) -> None:
             order.append(answer["id"])
     st.session_state[order_key] = order
     st.markdown(
-        '<p class="hint">Use the arrows. Best at the top. The server turns that order into points.</p>',
+        '<p class="hint">Use the arrows. The number is what this spot pays. Every ranking in the room gets added up.</p>',
         unsafe_allow_html=True,
     )
     for index, answer_id in enumerate(order):
         answer = known[answer_id]
         yours = " · Yours" if answer.get("is_own") else ""
+        paid = place_points(index + 1, len(order))
         st.markdown(
             f"""
             <div class="answer-card">
-              <p class="eyebrow">#{index + 1}{yours}</p>
+              <p class="eyebrow">#{index + 1} · +{paid}{yours}</p>
               <p class="answer-body">{esc(answer["body"])}</p>
             </div>
             """,
@@ -102,10 +104,11 @@ def _locked(answers: list[dict], order: list[str]) -> None:
         if answer is None:
             continue
         yours = " · Yours" if answer.get("is_own") else ""
+        paid = place_points(index + 1, len(order))
         st.markdown(
             f"""
             <div class="answer-card">
-              <p class="eyebrow">#{index + 1}{yours}</p>
+              <p class="eyebrow">#{index + 1} · +{paid}{yours}</p>
               <p class="answer-body">{esc(answer["body"])}</p>
             </div>
             """,

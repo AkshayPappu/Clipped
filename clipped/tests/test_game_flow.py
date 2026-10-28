@@ -150,16 +150,16 @@ def test_agreed_order_scores_best_then_worst(store: MemoryStore):
     reveals = {item["body"]: item for item in board["leaderboard"]["reveals"]}
     assert reveals["alpha answer"]["author"] == "Ann"
     assert reveals["alpha answer"]["place"] == 1
-    assert reveals["alpha answer"]["points"] == 300
+    assert reveals["alpha answer"]["points"] == 600
     assert reveals["alpha answer"]["tied"] is False
     assert reveals["beta answer"]["points"] == 0
     assert reveals["beta answer"]["place"] == 2
     assert board["leaderboard"]["standings"][0]["display_name"] == "Ann"
-    assert board["leaderboard"]["standings"][0]["points"] == 300
+    assert board["leaderboard"]["standings"][0]["points"] == 600
     assert board["leaderboard"]["standings"][0]["firsts"] == 1
 
 
-def test_split_rankings_tie_at_the_lower_score(store: MemoryStore):
+def test_split_rankings_keep_both_totals(store: MemoryStore):
     tokens, _code = open_room(store, ["Ann", "Bea"], start=True)
     store.submit_answer(tokens[0], "alpha answer")
     view = store.submit_answer(tokens[1], "beta answer")
@@ -167,13 +167,13 @@ def test_split_rankings_tie_at_the_lower_score(store: MemoryStore):
     store.submit_ranking(tokens[0], [by_body["alpha answer"], by_body["beta answer"]])
     board = store.submit_ranking(tokens[1], [by_body["beta answer"], by_body["alpha answer"]])
     assert all(
-        item["points"] == 0 and item["tied"] and item["place"] == 2
+        item["points"] == 300 and item["tied"] and item["place"] == 1
         for item in board["leaderboard"]["reveals"]
     )
     assert all(row["firsts"] == 0 for row in board["leaderboard"]["standings"])
 
 
-def test_middle_place_scores_150(store: MemoryStore):
+def test_middle_spot_is_added_from_every_ranking(store: MemoryStore):
     tokens, _code = open_room(store, ["Ann", "Bea", "Cy"], start=True)
     store.submit_answer(tokens[0], "alpha")
     store.submit_answer(tokens[1], "beta")
@@ -184,7 +184,7 @@ def test_middle_place_scores_150(store: MemoryStore):
     for token in tokens:
         board = store.submit_ranking(token, order)
     reveals = {item["body"]: item for item in board["leaderboard"]["reveals"]}
-    assert (reveals["alpha"]["points"], reveals["beta"]["points"], reveals["gamma"]["points"]) == (300, 150, 0)
+    assert (reveals["alpha"]["points"], reveals["beta"]["points"], reveals["gamma"]["points"]) == (900, 450, 0)
     assert reveals["alpha"]["author"] == "Ann"
 
 
@@ -199,7 +199,7 @@ def test_single_answer_is_first_when_ranked(store: MemoryStore):
     reveal = board["leaderboard"]["reveals"][0]
     assert reveal["author"] == "Ann"
     assert reveal["place"] == 1
-    assert reveal["points"] == 300
+    assert reveal["points"] == 900
     assert reveal["tied"] is False
     quiet = next(row for row in board["leaderboard"]["standings"] if row["display_name"] == "Bea")
     assert quiet["points"] == 0

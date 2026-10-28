@@ -152,12 +152,28 @@ CREATE TABLE IF NOT EXISTS round_results (
     player_id UUID NOT NULL REFERENCES players (id) ON DELETE CASCADE,
     place INTEGER NOT NULL CHECK (place >= 0),
     borda INTEGER NOT NULL CHECK (borda >= 0),
-    points_awarded INTEGER NOT NULL CHECK (points_awarded BETWEEN 0 AND 300),
+    points_awarded INTEGER NOT NULL CHECK (points_awarded >= 0),
     tied BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
     UNIQUE (round_id, answer_id),
     UNIQUE (round_id, player_id)
 );
+
+-- Older installs capped a round at 300. Scores are now a sum, so they can pass that.
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conrelid = 'public.round_results'::regclass
+          AND conname = 'round_results_points_awarded_check'
+          AND pg_get_constraintdef(oid) LIKE '%300%'
+    ) THEN
+        ALTER TABLE round_results DROP CONSTRAINT round_results_points_awarded_check;
+        ALTER TABLE round_results
+            ADD CONSTRAINT round_results_points_awarded_check CHECK (points_awarded >= 0);
+    END IF;
+END $$;
 
 CREATE INDEX IF NOT EXISTS round_results_round_idx ON round_results (round_id);
 CREATE INDEX IF NOT EXISTS round_results_player_idx ON round_results (player_id);
@@ -312,10 +328,7 @@ BEGIN
         scored.player_id,
         scored.place::INTEGER,
         scored.borda,
-        CASE
-            WHEN scored.any_ballot THEN _place_points(scored.place::INTEGER, scored.answer_count::INTEGER)
-            ELSE 0
-        END,
+        CASE WHEN scored.any_ballot THEN scored.borda ELSE 0 END,
         scored.tied
     FROM (
         SELECT
@@ -326,7 +339,7 @@ BEGIN
             ranked.answer_count,
             CASE
                 WHEN NOT ranked.any_ballot THEN 0
-                ELSE max(ranked.slot) OVER (PARTITION BY ranked.borda)
+                ELSE min(ranked.slot) OVER (PARTITION BY ranked.borda)
             END AS place,
             ranked.any_ballot AND ranked.tie_size > 1 AS tied
         FROM (
@@ -353,7 +366,7 @@ BEGIN
                 ) AS tie_size
             FROM answers a
             LEFT JOIN (
-                SELECT r.answer_id, sum(sizes.ballot_size - r.position + 1)::INTEGER AS borda
+                SELECT r.answer_id, sum(_place_points(r.position, sizes.ballot_size))::INTEGER AS borda
                 FROM rankings r
                 JOIN (
                     SELECT voter_id, count(*)::INTEGER AS ballot_size

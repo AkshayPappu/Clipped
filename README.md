@@ -44,12 +44,11 @@ The built-in bank has 110 prompts in [`clipped/database/seed.sql`](clipped/datab
 
 Players never send a score. They send an order, best to worst, and the server scores it:
 
-1. Each ranking gives the top answer the most weight and the bottom answer the least (Borda).
-2. Those weights are added up into one room order.
-3. Best place is 300. Worst place is 0. The places in between are even steps (three answers: 300, 150, 0).
-4. A tie takes the **lower** place in the tie, so a split room cannot inflate a score. Two answers that split the ranking both get 0.
-5. Nobody ranked anything → 0.
-6. No answer → 0 for that round.
+1. On one ranking, first place pays 300 and last place pays 0. The spots between are even steps. Three answers pay 300, 150, and 0 from that person.
+2. An answer's score is those payments added up across every ranking.
+3. The highest total finishes first. The same total is a tie, and both keep the points they earned. Two people ranking opposite answers leaves both on 300.
+4. Nobody ranked anything → 0.
+5. No answer → 0 for that round.
 
 ## Project layout
 
