@@ -36,7 +36,7 @@ def render_leaderboard() -> None:
     st.markdown('<p class="eyebrow">The receipts are in</p>', unsafe_allow_html=True)
     st.markdown(f'<h2 class="question">{esc(board.get("question"))}</h2>', unsafe_allow_html=True)
     st.markdown(
-        '<p class="hint">Each ranking pays the spot it put this answer in. The total is the score.</p>',
+        '<p class="hint score-hint">Each ranking pays the spot it put this answer in. The total is the score.</p>',
         unsafe_allow_html=True,
     )
     reveals = board.get("reveals") or []

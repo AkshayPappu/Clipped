@@ -159,7 +159,7 @@ def render_timer(server_now: str | None, deadline: str | None, total: int) -> No
 
 def render_progress(done: int, total: int, label: str) -> None:
     st.markdown(
-        f'<p class="hint"><strong style="color:white">{done}/{total}</strong> {esc(label)}</p>',
+        f'<div class="progress-wrap"><p class="progress"><span class="progress-count">{done}/{total}</span> {esc(label)}</p></div>',
         unsafe_allow_html=True,
     )
 

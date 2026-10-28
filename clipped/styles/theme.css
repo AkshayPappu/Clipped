@@ -159,15 +159,36 @@ h1, h2, h3, p, label, span, div, button, input, textarea {
   border-radius: 0;
   box-shadow: none;
 }
-.code-hint, .hint, .byline, .split, .wait {
+.code-hint, .hint, .byline, .split, .wait, .progress {
   color: var(--muted);
-  margin: 0.2rem 0 0;
+  margin: 0.65rem 0 0.15rem !important;
   font-size: 0.95rem;
   font-weight: 400;
   line-height: 1.45;
 }
-.byline { font-size: 0.84rem; color: var(--faint); }
-.wait { margin-top: 0.85rem; }
+.byline { font-size: 0.84rem; color: var(--faint); margin-top: 0.45rem !important; }
+.wait { margin-top: 0.85rem !important; }
+p.deck-note { margin: 0.95rem 0 0 !important; }
+p.score-hint { margin: 0.35rem 0 1.15rem !important; }
+.deck-spacer { height: 1.7rem; }
+.progress-wrap { padding: 2.15rem 0 2.15rem; }
+.progress { margin: 0 !important; }
+.progress-count { color: white; font-weight: 500; margin-right: 0.2rem; }
+.empty-note {
+  margin: 0.2rem 0.15rem 0.95rem !important;
+  color: var(--muted);
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+.field-label {
+  margin: 1.25rem 0 0.55rem !important;
+  color: var(--faint);
+  font-family: "Geist Mono", ui-monospace, monospace;
+  font-size: 0.66rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-weight: 500;
+}
 
 .section-title {
   font-weight: 400;
@@ -233,7 +254,7 @@ h1, h2, h3, p, label, span, div, button, input, textarea {
 .badge.host { color: white; }
 .badge.you { color: var(--muted); margin-left: 0.55rem; }
 
-.timer-wrap { margin: 0.35rem 0 0.15rem; }
+.timer-wrap { margin: 0.55rem 0 0.2rem; }
 .timer-row { display: flex; justify-content: space-between; align-items: flex-end; }
 .timer-num {
   font-weight: 400;
@@ -262,31 +283,36 @@ h1, h2, h3, p, label, span, div, button, input, textarea {
   margin: 0.75rem 0 0.15rem;
 }
 .locked { margin-top: 0.4rem; }
-.reveal { margin: 0 0 0.55rem; }
+.reveal { margin: 0 0 0.85rem; padding: 1.15rem 1.15rem 1.05rem; }
 .reveal.gem {
   background: #18181c;
   border-color: rgba(255, 255, 255, 0.16);
   border-left: 1px solid rgba(255, 255, 255, 0.16);
 }
-.tile-top { display: flex; align-items: baseline; justify-content: space-between; gap: 0.75rem; }
+.tile-top { display: flex; align-items: baseline; justify-content: space-between; gap: 0.85rem; }
 .tile-rank, .verdict {
+  font-family: "Geist Mono", ui-monospace, monospace;
   font-weight: 500;
-  font-size: 0.92rem;
-  letter-spacing: -0.02em;
-  color: white;
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
   line-height: 1;
 }
-.verdict.gem, .tile-rank { color: white; }
+.verdict.gem { color: white; }
+.tile-rank { color: white; font-size: 0.78rem; letter-spacing: 0.04em; text-transform: none; }
 .verdict.common { color: #d4d4dc; }
 .verdict.lower, .verdict.none { color: var(--muted); }
 .tile-pay {
   margin-left: auto;
   color: var(--muted);
-  font-weight: 400;
+  font-weight: 500;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.03em;
 }
-.reveal .tile-pay { color: white; font-size: 1.05rem; }
+.reveal .tile-pay { color: white; font-size: 1.2rem; letter-spacing: -0.04em; }
+.reveal .answer-body { margin-top: 0.85rem !important; font-size: 1.32rem; line-height: 1.28; }
+.reveal .byline { margin-top: 0.4rem !important; }
 .yours {
   display: inline-block;
   margin-top: 0.5rem;
@@ -306,16 +332,23 @@ h1, h2, h3, p, label, span, div, button, input, textarea {
   color: white;
 }
 
-.spots { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.85rem; }
+.spots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: 1rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
 .spot {
   display: flex;
   flex-direction: column;
-  gap: 0.08rem;
-  min-width: 2.4rem;
-  padding: 0.28rem 0.45rem 0.22rem;
-  background: rgba(0, 0, 0, 0.28);
+  gap: 0.18rem;
+  min-width: 3.1rem;
+  padding: 0.4rem 0.55rem 0.38rem;
+  background: rgba(255, 255, 255, 0.04);
   border: 0;
-  border-radius: 10px;
+  border-radius: 12px;
   box-shadow: none;
   line-height: 1;
 }
@@ -333,8 +366,8 @@ h1, h2, h3, p, label, span, div, button, input, textarea {
 .standing {
   display: flex;
   align-items: center;
-  gap: 0.7rem;
-  padding: 0.7rem 0.05rem;
+  gap: 0.85rem;
+  padding: 0.9rem 0.1rem;
   margin: 0;
   background: none;
   border: 0;
@@ -485,23 +518,130 @@ div[class*="st-key-closed-back"] button {
 [data-baseweb="select"] > div {
   background: #101012 !important;
   color: white !important;
-  border: 1px solid var(--line) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
   box-shadow: none !important;
-  border-radius: 14px !important;
-  min-height: 48px;
+  border-radius: 16px !important;
+  min-height: 52px;
+}
+[data-testid="stTextArea"] { margin-top: 0.15rem !important; }
+[data-testid="stTextArea"] > div,
+[data-testid="stTextArea"] [data-baseweb="textarea"],
+[data-testid="stTextArea"] [data-baseweb="base-input"] {
+  background: #101012 !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  border-radius: 16px !important;
+  box-shadow: none !important;
 }
 [data-testid="stTextArea"] textarea {
-  min-height: 128px;
-  font-size: 1.05rem !important;
-  line-height: 1.45 !important;
-  padding-top: 0.85rem !important;
+  min-height: 104px !important;
+  font-size: 1rem !important;
+  line-height: 1.5 !important;
+  padding: 0.9rem 1rem !important;
+  border: 0 !important;
+  border-radius: 16px !important;
+  background: transparent !important;
+  resize: vertical;
 }
+div[class*="st-key-answer-"] [data-testid="stTextArea"] > div,
+div[class*="st-key-answer-"] [data-baseweb="textarea"],
+div[class*="st-key-answer-"] [data-baseweb="base-input"] {
+  background: #141418 !important;
+  border: 1px solid rgba(255, 255, 255, 0.16) !important;
+  border-radius: 22px !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06) !important;
+}
+div[class*="st-key-answer-"] textarea {
+  min-height: 188px !important;
+  font-size: 1.16rem !important;
+  line-height: 1.45 !important;
+  letter-spacing: -0.02em !important;
+  padding: 1.2rem 1.15rem 1.05rem !important;
+  border-radius: 22px !important;
+  resize: none !important;
+}
+div[class*="st-key-answer-"]:focus-within [data-baseweb="textarea"],
+div[class*="st-key-answer-"]:focus-within [data-testid="stTextArea"] > div {
+  border-color: rgba(255, 255, 255, 0.4) !important;
+}
+[data-testid="stTextArea"] textarea::placeholder { color: #7c7c86 !important; }
 [data-testid="stTextInput"] input:focus,
 [data-testid="stTextArea"] textarea:focus,
+[data-testid="stTextArea"]:focus-within > div,
+[data-testid="stTextArea"]:focus-within [data-baseweb="textarea"],
 [data-baseweb="select"] > div:focus-within {
-  border-color: rgba(255, 255, 255, 0.28) !important;
+  border-color: rgba(255, 255, 255, 0.32) !important;
   box-shadow: none !important;
   outline: none !important;
+}
+
+.react-aria-ComboBox [role="group"],
+[data-testid="stMultiSelect"] [data-baseweb="select"] > div {
+  background: #101012 !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  border-radius: 14px !important;
+  min-height: 52px !important;
+  box-shadow: none !important;
+}
+.react-aria-ComboBox input {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  color: white !important;
+  font-size: 1rem !important;
+  min-height: 50px !important;
+  padding: 0 0.2rem 0 0.95rem !important;
+}
+.react-aria-ComboBox button {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  color: #9b9ba4 !important;
+  min-height: 0 !important;
+  width: 2.5rem !important;
+  border-radius: 10px !important;
+}
+div:has(> [role="listbox"]) {
+  background: #141416 !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 18px !important;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55) !important;
+  padding: 0.45rem !important;
+  overflow: hidden;
+}
+[role="listbox"] {
+  background: transparent !important;
+  padding: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0.18rem !important;
+}
+[role="option"] {
+  border-radius: 12px !important;
+  padding: 0.72rem 0.85rem !important;
+  margin: 0 0.15rem !important;
+  color: #c8c8d0 !important;
+  font-size: 0.98rem !important;
+  font-weight: 500 !important;
+  background: transparent !important;
+  outline: none !important;
+}
+[role="option"] [data-item-hl],
+[role="option"] > div {
+  background: transparent !important;
+  box-shadow: none !important;
+  color: inherit !important;
+}
+[role="option"][data-hovered="true"]:not([data-selected="true"]),
+[role="option"][data-focused="true"]:not([data-selected="true"]) {
+  background: rgba(255, 255, 255, 0.06) !important;
+  color: white !important;
+}
+[role="option"][aria-selected="true"],
+[role="option"][data-selected="true"],
+[role="option"][data-selected="true"][data-focused="true"],
+[role="option"][aria-selected="true"][data-focused="true"] {
+  background: #f4f4f5 !important;
+  color: #111113 !important;
 }
 [data-testid="stWidgetLabel"] p {
   font-family: "Geist Mono", ui-monospace, monospace !important;
@@ -518,14 +658,29 @@ div[class*="st-key-closed-back"] button {
   background: transparent !important;
 }
 
+[data-testid="stExpander"] { margin: 0.2rem 0 1.2rem !important; }
 [data-testid="stExpander"] details {
-  background: var(--fill) !important;
-  border: 1px solid var(--line) !important;
-  border-radius: 16px !important;
+  background: #121214 !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 18px !important;
   box-shadow: none !important;
+  overflow: hidden;
 }
-[data-testid="stExpander"] summary { font-weight: 500 !important; color: var(--muted) !important; }
-[data-testid="stExpander"] summary:hover { color: white !important; }
+[data-testid="stExpander"] summary {
+  min-height: 58px !important;
+  padding: 0.95rem 1.05rem !important;
+  font-weight: 500 !important;
+  color: white !important;
+}
+[data-testid="stExpander"] summary p {
+  margin: 0 !important;
+  color: #f4f4f5 !important;
+  font-size: 1rem !important;
+  font-weight: 500 !important;
+  letter-spacing: -0.02em !important;
+}
+[data-testid="stExpander"] summary:hover p { color: white !important; }
+[data-testid="stExpander"] [data-testid="stIconMaterial"] { color: #9b9ba4 !important; }
 
 [data-testid="stRadioGroup"] {
   background: transparent !important;

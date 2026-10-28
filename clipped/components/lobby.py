@@ -79,11 +79,22 @@ def _host_setup(view: dict) -> None:
     )
     order_label = st.radio("Question order", ["Random", "In order"], horizontal=True, key="order_label")
     order = "random" if order_label == "Random" else "sequential"
-    ready = _deck_count(categories or [], view.get("custom_prompts") or [])
+    customs = view.get("custom_prompts") or []
+    ready = _deck_count(categories or [], customs)
     warn = "" if ready >= int(rounds) else " — not enough for the rounds you picked"
-    st.markdown(f'<p class="hint">{ready} questions ready{warn}.</p>', unsafe_allow_html=True)
+    st.markdown(
+        f'<p class="hint deck-note">{ready} questions ready{warn}.</p><div class="deck-spacer"></div>',
+        unsafe_allow_html=True,
+    )
 
-    with st.expander("Custom questions"):
+    added = len(customs)
+    label = "Custom questions" if added == 0 else f"Custom questions · {added}"
+    with st.expander(label):
+        if added == 0:
+            st.markdown(
+                '<p class="empty-note">Nothing in here yet. Add one question this group would actually answer, or paste a list.</p>',
+                unsafe_allow_html=True,
+            )
         _custom_editor(view)
 
     if primary("Start game", "start-game"):
@@ -151,7 +162,7 @@ def _custom_editor(view: dict) -> None:
                     st.rerun()
                 st.error(result.get("error", "Couldn't save that."))
 
-    pasted = st.text_area("Paste questions, one per line", key="import_body", height=120)
+    pasted = st.text_area("Paste questions, one per line", key="import_body", height=96, placeholder="One question per line")
     if secondary("Import list", "import-questions"):
         result = room_service.import_prompts(token, pasted)
         if result.get("ok"):

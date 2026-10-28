@@ -54,12 +54,13 @@ def render_prompt(view: dict) -> None:
 def _answer_form(view: dict) -> None:
     round_key = f"answer-{view['room']['id']}-{view['room']['current_round']}"
     with st.form(f"form-{round_key}", clear_on_submit=False):
+        st.markdown('<p class="field-label">Your answer</p>', unsafe_allow_html=True)
         text = st.text_area(
             "Your answer",
             key=round_key,
-            placeholder="Drop your answer...",
+            placeholder="Say the thing the group chat would screenshot.",
             max_chars=280,
-            height=140,
+            height=168,
             label_visibility="collapsed",
         )
         submitted = st.form_submit_button("Lock it in", type="primary", width="stretch")
