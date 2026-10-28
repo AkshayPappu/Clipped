@@ -1,4 +1,6 @@
 .env
+.env.*
+!.env.example
 .streamlit/secrets.toml
 __pycache__/
 .pytest_cache/
@@ -6,3 +8,8 @@ __pycache__/
 *.pyc
 .python-version
 .mypy_cache/
+node_modules/
+.next/
+.vercel/
+next-env.d.ts
+*.tsbuildinfo

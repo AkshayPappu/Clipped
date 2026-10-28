@@ -97,25 +97,25 @@ Rooms expire 12 hours after they're created. Active room codes are unique; an ex
 
 ## Vercel
 
-The playable Vercel app is the Next.js client in `web/`. Rooms, answers, and rankings stay in Supabase, so two phones can join the same code even though Vercel does not keep a process alive between requests. The service role key is used only by `web/app/api/game/route.ts`. The browser never sees it.
+The site at the repository root is the Next.js app. Rooms, answers, and rankings stay in Supabase, so two phones can join the same code even though Vercel does not keep a process alive between requests. The service role key is used only by `app/api/game/route.ts`. The browser never sees it.
 
-In the Vercel project, set the root directory to `web` and add:
+Leave the Vercel root directory as the repository root. Do not set it to a subfolder. Add:
 
 ```bash
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 ```
 
-Deploy. Invite links look like `https://your-app.vercel.app/?room=4829`. Copy invite from the lobby. The address bar after you join does not contain your seat.
+Invite links look like `https://clipped-app.vercel.app/?room=4829`. Copy invite from the lobby. The address bar after you join does not contain your seat.
 
-Locally, from `web/`:
+Locally:
 
 ```bash
 npm install
 npm run dev
 ```
 
-Put the same two variables in `web/.env.local`. The dev server listens on port 47231.
+Put the same two variables in `.env.local`. The dev server listens on port 47231.
 
 The Streamlit app in `clipped/` still runs the same game against the same database when those variables are set.
 
