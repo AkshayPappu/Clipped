@@ -110,16 +110,17 @@ def copy_row(items: list[tuple[str, str]]) -> None:
           .copy-row button {{
             flex: 1;
             min-height: 40px;
-            border: 0;
-            border-radius: 999px;
+            border: 2px solid #120e0b;
+            border-radius: 2px;
             appearance: none;
-            background-color: transparent;
-            color: #c9c9d2;
-            font: 600 15px "Outfit", system-ui, sans-serif;
-            letter-spacing: -0.02em;
+            background-color: #2a241c;
+            color: #f3ece2;
+            box-shadow: 0 3px 0 #120e0b;
+            font: 600 14px "IBM Plex Mono", ui-monospace, monospace;
             cursor: pointer;
           }}
-          .copy-row button:hover {{ color: white; }}
+          .copy-row button:hover {{ background-color: #342c24; }}
+          .copy-row button:active {{ transform: translateY(2px); box-shadow: 0 1px 0 #120e0b; }}
         </style>
         <div class="copy-row">{"".join(buttons)}</div>
         <script>

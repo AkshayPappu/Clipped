@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import html
 from datetime import timedelta
 
 import streamlit as st
@@ -39,7 +40,7 @@ def render_lobby(view: dict) -> None:
         f"""
         <div class="code-block">
           <div class="code-label">Room code</div>
-          <div class="code-value">{code}</div>
+          <div class="code-digits">{"".join(f'<span class="digit">{html.escape(ch)}</span>' for ch in code)}</div>
           <p class="code-hint">Send this to the group.</p>
         </div>
         """,
