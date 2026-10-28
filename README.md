@@ -95,6 +95,30 @@ APP_BASE_URL = "https://your-app.streamlit.app"
 
 Rooms expire 12 hours after they're created. Active room codes are unique; an expired code can be reused.
 
+## Vercel
+
+The playable Vercel app is the Next.js client in `web/`. Rooms, answers, and rankings stay in Supabase, so two phones can join the same code even though Vercel does not keep a process alive between requests. The service role key is used only by `web/app/api/game/route.ts`. The browser never sees it.
+
+In the Vercel project, set the root directory to `web` and add:
+
+```bash
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+```
+
+Deploy. Invite links look like `https://your-app.vercel.app/?room=4829`. Copy invite from the lobby. The address bar after you join does not contain your seat.
+
+Locally, from `web/`:
+
+```bash
+npm install
+npm run dev
+```
+
+Put the same two variables in `web/.env.local`. The dev server listens on port 47231.
+
+The Streamlit app in `clipped/` still runs the same game against the same database when those variables are set.
+
 ## Streamlit Community Cloud
 
 1. Push this repo.
