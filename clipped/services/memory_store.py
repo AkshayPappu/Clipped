@@ -1036,8 +1036,10 @@ class MemoryStore:
             public = {key: value for key, value in row.items() if key != "player_id"}
             public["delta"] = previous_rank.get(row["player_id"], row["rank"]) - row["rank"]
             standings.append(public)
+        answers = self._round_answers(rnd.id)
+        spots = _spot_counts(rnd.id, [answer.id for answer in answers], self.rankings)
         reveals = []
-        for answer in self._round_answers(rnd.id):
+        for answer in answers:
             result = self.results.get(f"{rnd.id}:{answer.id}")
             if result is None:
                 continue
@@ -1049,6 +1051,7 @@ class MemoryStore:
                     "place": result.place,
                     "points": result.points,
                     "tied": result.tied,
+                    "spots": spots[answer.id],
                     "order": answer.display_order,
                 }
             )
@@ -1104,3 +1107,18 @@ def _id() -> str:
 
 def _ranking_key(round_id: str, voter_id: str) -> str:
     return f"{round_id}:{voter_id}"
+
+
+def _spot_counts(round_id: str, answer_ids: list[str], rankings: dict[str, list[str]]) -> dict[str, list[int]]:
+    """How many ballots put each answer in each spot. Index 0 is first place."""
+    width = len(answer_ids)
+    counts = {answer_id: [0] * width for answer_id in answer_ids}
+    prefix = f"{round_id}:"
+    for key, order in rankings.items():
+        if not key.startswith(prefix):
+            continue
+        for index, answer_id in enumerate(order):
+            row = counts.get(answer_id)
+            if row is not None and index < width:
+                row[index] += 1
+    return counts

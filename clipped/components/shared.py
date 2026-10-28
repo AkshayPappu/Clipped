@@ -182,6 +182,21 @@ def ordinal(place: int) -> str:
     return f"{place}{suffix}"
 
 
+def spots_html(reveal: dict) -> str:
+    spots = reveal.get("spots") or []
+    counts = [int(count or 0) for count in spots]
+    if not counts or not any(counts):
+        return ""
+    pills = []
+    for index, count in enumerate(counts):
+        quiet = " quiet" if count == 0 else ""
+        pills.append(
+            f'<span class="spot{quiet}"><span class="spot-place">{esc(ordinal(index + 1))}</span>'
+            f'<span class="spot-count">{count}</span></span>'
+        )
+    return f'<div class="spots" aria-label="Votes by spot">{"".join(pills)}</div>'
+
+
 def place_line(reveal: dict) -> str:
     place = int(reveal.get("place") or 0)
     points = int(reveal.get("points") or 0)

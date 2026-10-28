@@ -15,6 +15,7 @@ from components.shared import (
     reconnecting,
     place_line,
     render_standings,
+    spots_html,
     reveal_class,
     secondary,
     show_round_label,
@@ -48,6 +49,7 @@ def render_leaderboard() -> None:
               <div class="verdict {esc(klass)}">{esc(place_line(reveal))}</div>
               <p class="answer-body">{esc(reveal["body"])}</p>
               <p class="byline">Submitted by {esc(reveal["author"])}</p>
+              {spots_html(reveal)}
             </div>
             """,
             unsafe_allow_html=True,

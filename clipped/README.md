@@ -27,7 +27,7 @@ The phase lives in the database (or the local store). Phones do not decide it th
 - One answer per player. You can't see anyone else's text yet.
 - The phase ends when every active player has submitted, the host ends it, or the server clock hits the deadline. A missing host does not freeze a timer.
 - Ranking is anonymous. Put every answer in order, best at the top, including your own. You can't change it after you lock it in.
-- The leaderboard reveals authors, the consensus place, and the points. The host starts the next round.
+- The leaderboard reveals authors, the place, the points, and how many rankings put that answer in each spot. The host starts the next round.
 - The last round ends on a winner screen. **Play again** keeps the squad. **New room** leaves.
 
 Host setup, before start:

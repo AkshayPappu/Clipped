@@ -152,8 +152,10 @@ def test_agreed_order_scores_best_then_worst(store: MemoryStore):
     assert reveals["alpha answer"]["place"] == 1
     assert reveals["alpha answer"]["points"] == 600
     assert reveals["alpha answer"]["tied"] is False
+    assert reveals["alpha answer"]["spots"] == [2, 0]
     assert reveals["beta answer"]["points"] == 0
     assert reveals["beta answer"]["place"] == 2
+    assert reveals["beta answer"]["spots"] == [0, 2]
     assert board["leaderboard"]["standings"][0]["display_name"] == "Ann"
     assert board["leaderboard"]["standings"][0]["points"] == 600
     assert board["leaderboard"]["standings"][0]["firsts"] == 1
@@ -167,7 +169,7 @@ def test_split_rankings_keep_both_totals(store: MemoryStore):
     store.submit_ranking(tokens[0], [by_body["alpha answer"], by_body["beta answer"]])
     board = store.submit_ranking(tokens[1], [by_body["beta answer"], by_body["alpha answer"]])
     assert all(
-        item["points"] == 300 and item["tied"] and item["place"] == 1
+        item["points"] == 300 and item["tied"] and item["place"] == 1 and item["spots"] == [1, 1]
         for item in board["leaderboard"]["reveals"]
     )
     assert all(row["firsts"] == 0 for row in board["leaderboard"]["standings"])
@@ -185,6 +187,9 @@ def test_middle_spot_is_added_from_every_ranking(store: MemoryStore):
         board = store.submit_ranking(token, order)
     reveals = {item["body"]: item for item in board["leaderboard"]["reveals"]}
     assert (reveals["alpha"]["points"], reveals["beta"]["points"], reveals["gamma"]["points"]) == (900, 450, 0)
+    assert reveals["alpha"]["spots"] == [3, 0, 0]
+    assert reveals["beta"]["spots"] == [0, 3, 0]
+    assert reveals["gamma"]["spots"] == [0, 0, 3]
     assert reveals["alpha"]["author"] == "Ann"
 
 
@@ -201,6 +206,7 @@ def test_single_answer_is_first_when_ranked(store: MemoryStore):
     assert reveal["place"] == 1
     assert reveal["points"] == 900
     assert reveal["tied"] is False
+    assert reveal["spots"] == [3]
     quiet = next(row for row in board["leaderboard"]["standings"] if row["display_name"] == "Bea")
     assert quiet["points"] == 0
 
@@ -212,7 +218,10 @@ def test_zero_rankings_score_nothing(store: MemoryStore):
     board = store.skip_phase(tokens[0])
     assert board["room"]["status"] == "leaderboard"
     assert board["leaderboard"]["reveals"]
-    assert all(item["points"] == 0 and item["place"] == 0 for item in board["leaderboard"]["reveals"])
+    assert all(
+        item["points"] == 0 and item["place"] == 0 and item["spots"] == [0, 0]
+        for item in board["leaderboard"]["reveals"]
+    )
 
 
 def test_no_submission_scores_zero(store: MemoryStore):

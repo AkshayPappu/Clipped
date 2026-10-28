@@ -47,7 +47,7 @@ def _bootstrap() -> None:
     sid = query_value("sid")
     if not sid:
         return
-    result = game_service.reconnect(sid)
+    result = room_service.reconnect(sid)
     if result.get("ok"):
         st.session_state["token"] = sid
         st.session_state["screen"] = "game"

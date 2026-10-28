@@ -635,7 +635,19 @@ BEGIN
             'author', pl.display_name,
             'place', rr.place,
             'points', rr.points_awarded,
-            'tied', rr.tied
+            'tied', rr.tied,
+            'spots', (
+                SELECT coalesce(jsonb_agg(coalesce(c.n, 0) ORDER BY s.pos), '[]'::JSONB)
+                FROM generate_series(1, (
+                    SELECT count(*)::INTEGER FROM answers WHERE round_id = v_round.id
+                )) AS s(pos)
+                LEFT JOIN (
+                    SELECT r.position, count(*)::INTEGER AS n
+                    FROM rankings r
+                    WHERE r.round_id = v_round.id AND r.answer_id = a.id
+                    GROUP BY r.position
+                ) c ON c.position = s.pos
+            )
         ) ORDER BY rr.points_awarded DESC, rr.place ASC, a.display_order), '[]'::JSONB)
         INTO v_reveals
         FROM round_results rr
