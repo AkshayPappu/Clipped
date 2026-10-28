@@ -1,0 +1,16 @@
+[theme]
+base = "dark"
+primaryColor = "#A855F7"
+backgroundColor = "#0B0B0F"
+secondaryBackgroundColor = "#14141C"
+textColor = "#F7F7F8"
+font = "sans serif"
+
+[client]
+toolbarMode = "minimal"
+
+[browser]
+gatherUsageStats = false
+
+[server]
+headless = true
